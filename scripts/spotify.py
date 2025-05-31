@@ -25,8 +25,20 @@ LOG_FILENAME = "spotify_bot_log.txt"
 
 # --- Logging Function ---
 def log_message(message):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    full_message = f"[{timestamp}] {message}"
+    """Prints a message and appends it to the log file with a timestamp in IST."""
+    try:
+        # Get current UTC time
+        utc_now = datetime.datetime.now(datetime.timezone.utc)
+        # Convert to IST
+        ist_tz = pytz.timezone("Asia/Kolkata")
+        ist_now = utc_now.astimezone(ist_tz)
+        timestamp = ist_now.strftime("%Y-%m-%d %H:%M:%S %Z") # Added %Z for timezone
+        full_message = f"[{timestamp}] {message}"
+    except Exception as e_time: # Catch potential errors in time formatting
+        # Fallback to simple UTC if timezone stuff fails, to not break logging
+        timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        full_message = f"[{timestamp}] {message} (Timezone conversion error: {e_time})"
+
     print(full_message)
     with open(LOG_FILENAME, "a", encoding="utf-8") as f:
         f.write(full_message + "\n")
@@ -160,11 +172,18 @@ def load_google_drive_service():
 
 def get_target_archive_file(service, input_folder_id, target_archive_filename):
     """Finds the specified ARCHIVE file by name in the Google Drive folder."""
+    log_message(f"DEBUG: Inside get_target_archive_file. Input Folder ID: '{input_folder_id}', Target Filename: '{target_archive_filename}'")
+
+    if not input_folder_id or not target_archive_filename:
+        log_message("DEBUG: Either input_folder_id or target_archive_filename is missing/empty before query.")
+        return None
+
     try:
         # Query for the specific filename. MimeType for "Compressed archive" can be unreliable/varied.
         # Best to find by name and then try to treat as zip.
-        query = f"'{input_folder_id}' in parents and name = '{target_archive_filename}' and trashed=false"
         
+        query = f"'{input_folder_id}' in parents and name = '{target_archive_filename}' and trashed=false"
+        log_message(f"DEBUG: Executing Google Drive API query: {query}")
         results = service.files().list(
             q=query,
             pageSize=5, # Should ideally be only one, or very few if versions exist.
