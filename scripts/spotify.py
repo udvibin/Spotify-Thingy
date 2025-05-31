@@ -229,21 +229,6 @@ def download_and_extract_chat_from_archive(service, file_id, file_name):
         log_message(f"Error downloading or extracting archive file {file_name} (ID: {file_id}): {e}")
         return None
 
-def move_file_to_archive_folder(service, file_id, file_name, archive_folder_id, original_parent_folder_id): # Renamed for clarity
-    log_message(f"Archiving {file_name} (ID: {file_id}) from {original_parent_folder_id} to folder ID: {archive_folder_id}")
-    try:
-        service.files().update(
-            fileId=file_id,
-            addParents=archive_folder_id,
-            removeParents=original_parent_folder_id, 
-            fields='id, parents'
-        ).execute()
-        log_message(f"Successfully moved {file_name} to archive folder.")
-        return True
-    except Exception as e:
-        log_message(f"Error moving file {file_name} to archive folder: {e}")
-        return False
-
 # --- Main Orchestration Logic ---
 def process_spotify_from_drive():
     log_message("Starting Spotify processing from Google Drive...")
@@ -320,11 +305,8 @@ def process_spotify_from_drive():
                 else:
                     log_message(f"No new tracks from {file_name} to add to Spotify (all were already present or invalid).")
         
-        # Move processed file to archive, regardless of whether songs were added (as long as chat content was processed)
-        move_file_to_archive_folder(drive_service, file_id, file_name, archive_drive_folder_id, input_drive_folder_id)
     else:
         log_message(f"Failed to get chat content from {file_name}. Moving unprocessed archive to archive folder.")
-        move_file_to_archive_folder(drive_service, file_id, file_name, archive_drive_folder_id, input_drive_folder_id)
 
     log_message(f"\n--- Run Summary ---")
     if overall_tracks_added_this_run > 0:
