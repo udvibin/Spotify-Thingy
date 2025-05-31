@@ -242,7 +242,7 @@ def process_spotify_from_drive():
     input_drive_folder_id = os.getenv("GOOGLE_DRIVE_INPUT_FOLDER_ID")
     target_archive_name_on_drive = os.getenv("TARGET_DRIVE_ARCHIVE_FILENAME", TARGET_DRIVE_ARCHIVE_FILENAME)
 
-    if not input_drive_folder_id or not archive_drive_folder_id:
+    if not input_drive_folder_id:
         log_message("Error: GOOGLE_DRIVE_INPUT_FOLDER_ID not set as an environment variable.")
         return
     
