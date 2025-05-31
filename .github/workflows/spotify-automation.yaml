@@ -47,7 +47,6 @@ jobs:
           SPOTIPY_CACHE_CONTENT: ${{ secrets.SPOTIPY_CACHE_CONTENT }} # Script might still use this
           GOOGLE_APPLICATION_CREDENTIALS_CONTENT: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_CONTENT }}
           GOOGLE_DRIVE_INPUT_FOLDER_ID: ${{ vars.GOOGLE_DRIVE_INPUT_FOLDER_ID }}
-          GOOGLE_DRIVE_ARCHIVE_FOLDER_ID: ${{ vars.GOOGLE_DRIVE_ARCHIVE_FOLDER_ID }}
           TARGET_DRIVE_ARCHIVE_FILENAME: ${{ secrets.TARGET_DRIVE_ARCHIVE_FILENAME }} # Pass this if you set it as a secret
         run: python scripts/spotify.py # Path to your script
 
