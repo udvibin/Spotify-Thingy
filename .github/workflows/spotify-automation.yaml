@@ -1,0 +1,72 @@
+name: Spotify Playlist Updater from Drive
+
+on:
+  schedule:
+    # Runs at 03:00 UTC every day. Adjust as needed.
+    # Example: '0 */6 * * *' would be every 6 hours.
+    # Example: '0 10 * * 1-5' would be 10 AM UTC on Weekdays.
+    - cron: '0 3 * * *' 
+  workflow_dispatch: # Allows manual triggering from the Actions tab
+
+jobs:
+  update-playlist:
+    runs-on: ubuntu-latest # Use a Linux runner
+    
+    permissions: # Add this section to allow writing back to the repo for logs
+      contents: write # Allows the action to commit to the repository
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Or your preferred Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create Spotify Cache File from Secret
+        env:
+          SPOTIPY_CACHE_SECRET: ${{ secrets.SPOTIPY_CACHE_CONTENT }}
+        run: |
+          echo "${SPOTIPY_CACHE_SECRET}" > .spotifycache
+          echo "Spotify cache file created."
+        # Note: Using double quotes around the secret variable in echo can be safer
+        # if the secret content might have special characters that interfere with shell.
+
+      - name: Run Spotify Update Script
+        env:
+          SPOTIPY_CLIENT_ID: ${{ secrets.SPOTIPY_CLIENT_ID }}
+          SPOTIPY_CLIENT_SECRET: ${{ secrets.SPOTIPY_CLIENT_SECRET }}
+          SPOTIPY_REDIRECT_URI: ${{ secrets.SPOTIPY_REDIRECT_URI }}
+          TARGET_PLAYLIST_ID: ${{ secrets.TARGET_PLAYLIST_ID }}
+          SPOTIPY_CACHE_CONTENT: ${{ secrets.SPOTIPY_CACHE_CONTENT }} # Script might still use this
+          GOOGLE_APPLICATION_CREDENTIALS_CONTENT: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_CONTENT }}
+          GOOGLE_DRIVE_INPUT_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_INPUT_FOLDER_ID }}
+          GOOGLE_DRIVE_ARCHIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_ARCHIVE_FOLDER_ID }}
+          TARGET_DRIVE_ARCHIVE_FILENAME: ${{ secrets.TARGET_DRIVE_ARCHIVE_FILENAME }} # Pass this if you set it as a secret
+        run: python scripts/spotify.py # Path to your script
+
+      - name: Commit and Push Log File (Optional)
+        if: always() # Run this step even if previous steps fail, to capture logs
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com' # Standard email for actions bot
+          # Check if log file exists and has content before trying to add
+          if [ -f spotify_bot_log.txt ] && [ -s spotify_bot_log.txt ]; then
+            git add spotify_bot_log.txt
+            # Check if there are changes to commit
+            if ! git diff --staged --quiet; then
+              git commit -m "Update Spotify bot log $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+              # Retry push with a small delay in case of temporary glitches
+              git push || (sleep 5 && git push) || echo "Failed to push log file after retry."
+            else
+              echo "No changes to log file to commit."
+            fi
+          else
+            echo "Log file not found or is empty."
+          fi
