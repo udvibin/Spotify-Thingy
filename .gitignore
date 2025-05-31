@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+.spotifycache
+spotify_bot_log.txt 
+gen-lang-client-0464809216-188b012ace24.json
