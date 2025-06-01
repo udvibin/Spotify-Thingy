@@ -32,3 +32,11 @@ No new tracks were added to Spotify in this run.
 [2025-05-31 18:18:57 UTC] --- Run Summary --- 
 No new tracks were added to Spotify in this run. (Timezone conversion error: name 'pytz' is not defined)
 [2025-05-31 18:18:57 UTC] Spotify processing from Google Drive finished. (Timezone conversion error: name 'pytz' is not defined)
+[2025-06-01 03:58:05 UTC] Starting Spotify processing from Google Drive... (Timezone conversion error: name 'pytz' is not defined)
+[2025-06-01 03:58:05 UTC] Looking for target archive file '' in input folder '1B_xYH6Bi0B6HbNMLupm8P5LChLSNxqi9'. (Timezone conversion error: name 'pytz' is not defined)
+[2025-06-01 03:58:05 UTC] DEBUG: Inside get_target_archive_file. Input Folder ID: '1B_xYH6Bi0B6HbNMLupm8P5LChLSNxqi9', Target Filename: '' (Timezone conversion error: name 'pytz' is not defined)
+[2025-06-01 03:58:05 UTC] DEBUG: Either input_folder_id or target_archive_filename is missing/empty before query. (Timezone conversion error: name 'pytz' is not defined)
+[2025-06-01 03:58:05 UTC] Target archive file '' not found. Nothing to process. (Timezone conversion error: name 'pytz' is not defined)
+[2025-06-01 03:58:05 UTC] --- Run Summary --- 
+No new tracks were added to Spotify in this run. (Timezone conversion error: name 'pytz' is not defined)
+[2025-06-01 03:58:05 UTC] Spotify processing from Google Drive finished. (Timezone conversion error: name 'pytz' is not defined)
