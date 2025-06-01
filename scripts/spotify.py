@@ -23,6 +23,7 @@ CHAT_TXT_FILENAME_IN_ARCHIVE_PATTERN = r"WhatsApp Chat with Mandatory vibe compl
 # If the name inside varies, a more general pattern like r".*\.txt" or r"_chat\.txt" might be needed.
 
 LOG_FILENAME = "spotify_bot_log.txt"
+SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN = [] # To store URIs of songs successfully added
 
 # --- Logging Function ---
 def log_message(message):
@@ -125,6 +126,8 @@ def get_existing_playlist_track_uris(sp, playlist_id):
     return existing_uris
 
 def add_tracks_to_playlist(sp, playlist_id, track_uris_to_add):
+    global SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN # Declare we're using the global
+
     if not track_uris_to_add:
         log_message("No new tracks to add to Spotify (list was empty).")
         return 0
@@ -139,20 +142,46 @@ def add_tracks_to_playlist(sp, playlist_id, track_uris_to_add):
     if len(valid_uris_to_add) < len(track_uris_to_add):
         log_message(f"Filtered out {len(track_uris_to_add) - len(valid_uris_to_add)} invalid or None URIs before adding.")
 
-    added_to_spotify_count = 0
+    successfully_added_this_call_count = 0
     for i in range(0, len(valid_uris_to_add), 100):
         chunk = valid_uris_to_add[i:i + 100]
         try:
             sp.playlist_add_items(playlist_id, chunk)
             log_message(f"Successfully added {len(chunk)} tracks to the Spotify playlist: {', '.join(chunk)}")
-            added_to_spotify_count += len(chunk)
+            SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN.extend(chunk) # Add this chunk to the global list
+            successfully_added_this_call_count += len(chunk)
         except spotipy.SpotifyException as e:
              log_message(f"Spotify API Error adding tracks: HTTP Status {e.http_status} - {e.msg}. Failed chunk: {chunk}")
              if e.http_status == 400 and "Invalid base62 id" in str(e.msg).lower():
                  log_message("Error suggests an issue with the Playlist ID ('{playlist_id}') or one of the track URIs in the chunk.")
         except Exception as e:
             log_message(f"General Error adding tracks to Spotify playlist: {e}. Failed chunk: {chunk}")
-    return added_to_spotify_count
+    return successfully_added_this_call_count # Return the count of tracks for which API call was made
+
+def get_track_details_for_logging(sp, track_uris):
+    """Fetches track name and primary artist for a list of track URIs."""
+    if not track_uris:
+        return []
+    
+    track_details_list = []
+    for i in range(0, len(track_uris), 50): # Spotify API get_tracks allows up to 50 IDs
+        chunk_uris = track_uris[i:i + 50]
+        try:
+            tracks_info = sp.tracks(tracks=chunk_uris)
+            for track_data in tracks_info['tracks']:
+                if track_data: 
+                    name = track_data['name']
+                    artists = ", ".join([artist['name'] for artist in track_data['artists']])
+                    track_details_list.append(f"{name} by {artists}")
+                else:
+                    # Find the corresponding URI for logging if track_data is None
+                    original_uri_index = i + tracks_info['tracks'].index(track_data) if track_data in tracks_info['tracks'] else -1
+                    failed_uri = chunk_uris[tracks_info['tracks'].index(track_data)] if original_uri_index != -1 and original_uri_index < len(chunk_uris) else "Unknown URI"
+                    track_details_list.append(f"Unknown Track (URI: {failed_uri} - not found or error)")
+        except Exception as e:
+            log_message(f"Error fetching track details for logging for chunk {chunk_uris}: {e}")
+            track_details_list.extend([f"ErrorFetchingTrackDetailsForURI({uri})" for uri in chunk_uris])
+    return track_details_list
 
 # --- Google Drive Functions ---
 def load_google_drive_service():
@@ -251,12 +280,17 @@ def download_and_extract_chat_from_archive(service, file_id, file_name):
 
 # --- Main Orchestration Logic ---
 def process_spotify_from_drive():
+    global SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN # Declare usage of the global list
+    SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN.clear() # Clear it at the beginning of each full run
+
     log_message("Starting Spotify processing from Google Drive...")
     load_dotenv() 
 
     drive_service = load_google_drive_service()
     if not drive_service:
-        log_message("Exiting due to Google Drive authentication failure.")
+        # Log for failure state
+        log_message("Spotify processing from Google Drive finished.")
+        log_message("No new songs added (Google Drive authentication failure).")
         return
 
     input_drive_folder_id = os.getenv("GOOGLE_DRIVE_INPUT_FOLDER_ID")
@@ -264,75 +298,106 @@ def process_spotify_from_drive():
 
     if not input_drive_folder_id:
         log_message("Error: GOOGLE_DRIVE_INPUT_FOLDER_ID not set as an environment variable.")
+        # Log for failure state
+        log_message("Spotify processing from Google Drive finished.")
+        log_message("No new songs added (Configuration error: missing Drive input folder ID).")
         return
     
     log_message(f"Looking for target archive file '{target_archive_name_on_drive}' in input folder '{input_drive_folder_id}'.")
     target_drive_file = get_target_archive_file(drive_service, input_drive_folder_id, target_archive_name_on_drive) 
     
+    # Define sp here to check its availability in the final logging block
+    sp = None 
+    # Define other state variables to give more specific "no new songs" reasons
+    chat_text_content = None
+    ordered_spotify_urls = None
+    final_uris_to_add_to_spotify_candidates = None # Tracks that were identified as new before trying to add
+
     if not target_drive_file:
         log_message(f"Target archive file '{target_archive_name_on_drive}' not found. Nothing to process.")
-        log_message("--- Run Summary --- \nNo new tracks were added to Spotify in this run.")
-        log_message("Spotify processing from Google Drive finished.")
-        return
-
-    file_id = target_drive_file['id']
-    file_name = target_drive_file['name']
-    
-    log_message(f"\nProcessing specified Drive archive: {file_name} (ID: {file_id})")
-    chat_text_content = download_and_extract_chat_from_archive(drive_service, file_id, file_name) 
-
-    overall_tracks_added_this_run = 0 # Initialize here
-
-    if chat_text_content:
-        sp = load_spotify_client()
-        if not sp:
-            log_message("Exiting due to Spotify authentication failure (triggered after finding chat content).")
-            # Not moving the file if Spotify auth fails, so it can be re-attempted.
-            return
+        # No further processing, will hit the final summary log
+    else:
+        file_id = target_drive_file['id']
+        file_name = target_drive_file['name']
         
-        target_playlist_id = os.getenv('TARGET_PLAYLIST_ID')
-        if not target_playlist_id:
-            log_message("Error: TARGET_PLAYLIST_ID not set as environment variable. Exiting.")
-            return
+        log_message(f"\nProcessing specified Drive archive: {file_name} (ID: {file_id})")
+        chat_text_content = download_and_extract_chat_from_archive(drive_service, file_id, file_name) 
 
-        existing_uris_in_spotify_playlist = get_existing_playlist_track_uris(sp, target_playlist_id)
-        
-        ordered_spotify_urls = extract_spotify_links_from_text_content(chat_text_content)
-        if not ordered_spotify_urls:
-            log_message(f"No Spotify URLs found in extracted chat from {file_name}.")
-        else:
-            ordered_track_uris_from_chat = []
-            for url in ordered_spotify_urls:
-                uri = get_track_uri_from_url(url)
-                if uri: ordered_track_uris_from_chat.append(uri)
+        if chat_text_content:
+            sp = load_spotify_client() # sp is defined here
+            if not sp:
+                log_message("Exiting due to Spotify authentication failure (triggered after finding chat content).")
+                # Log for failure state before returning
+                log_message("Spotify processing from Google Drive finished.")
+                log_message("No new songs added (Spotify authentication failure).")
+                return
             
-            if not ordered_track_uris_from_chat:
-                log_message(f"No valid track URIs derived from {file_name}.")
-            else:
-                log_message(f"Derived {len(ordered_track_uris_from_chat)} unique and valid URIs from {file_name}.")
-                final_uris_to_add_to_spotify = []
-                for uri in ordered_track_uris_from_chat:
-                    if uri not in existing_uris_in_spotify_playlist:
-                        final_uris_to_add_to_spotify.append(uri)
-                    else:
-                        log_message(f"Track {uri} from {file_name} is already in the Spotify playlist. Skipping.")
-                
-                if final_uris_to_add_to_spotify:
-                    log_message(f"Attempting to add {len(final_uris_to_add_to_spotify)} new tracks from {file_name} to Spotify.")
-                    tracks_added = add_tracks_to_playlist(sp, target_playlist_id, final_uris_to_add_to_spotify)
-                    overall_tracks_added_this_run += tracks_added
-                else:
-                    log_message(f"No new tracks from {file_name} to add to Spotify (all were already present or invalid).")
-        
-    else:
-        log_message(f"Failed to get chat content from {file_name}. Moving unprocessed archive to archive folder.")
+            target_playlist_id = os.getenv('TARGET_PLAYLIST_ID')
+            if not target_playlist_id:
+                log_message("Error: TARGET_PLAYLIST_ID not set as environment variable. Exiting.")
+                log_message("Spotify processing from Google Drive finished.")
+                log_message("No new songs added (Configuration error: missing Spotify playlist ID).")
+                return
 
-    log_message(f"\n--- Run Summary ---")
-    if overall_tracks_added_this_run > 0:
-        log_message(f"Total new tracks added to Spotify in this run: {overall_tracks_added_this_run}")
-    else:
-        log_message("No new tracks were added to Spotify in this run.")
+            existing_uris_in_spotify_playlist = get_existing_playlist_track_uris(sp, target_playlist_id)
+            
+            ordered_spotify_urls = extract_spotify_links_from_text_content(chat_text_content)
+            if not ordered_spotify_urls:
+                log_message(f"No Spotify URLs found in extracted chat from {file_name}.")
+            else:
+                ordered_track_uris_from_chat = []
+                for url in ordered_spotify_urls:
+                    uri = get_track_uri_from_url(url)
+                    if uri: ordered_track_uris_from_chat.append(uri)
+                
+                if not ordered_track_uris_from_chat:
+                    log_message(f"No valid track URIs derived from {file_name}.")
+                else:
+                    log_message(f"Derived {len(ordered_track_uris_from_chat)} unique and valid URIs from {file_name}.")
+                    final_uris_to_add_to_spotify_candidates = [] # Store candidates
+                    for uri in ordered_track_uris_from_chat:
+                        if uri not in existing_uris_in_spotify_playlist:
+                            final_uris_to_add_to_spotify_candidates.append(uri)
+                        else:
+                            log_message(f"Track {uri} from {file_name} is already in the Spotify playlist. Skipping.")
+                    
+                    if final_uris_to_add_to_spotify_candidates:
+                        log_message(f"Attempting to add {len(final_uris_to_add_to_spotify_candidates)} new tracks from {file_name} to Spotify.")
+                        # add_tracks_to_playlist will populate SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN
+                        add_tracks_to_playlist(sp, target_playlist_id, final_uris_to_add_to_spotify_candidates)
+                    else:
+                        log_message(f"No new tracks from {file_name} to add to Spotify (all were already present or invalid).")
+            
+        else: # Failed to get chat_text_content
+            log_message(f"Failed to get chat content from {file_name}.")
+
+    # --- Final Run Summary ---
     log_message("Spotify processing from Google Drive finished.")
+    
+    if SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN:
+        if sp: # Check if sp was initialized (it should be if songs were added)
+            song_details_for_log = get_track_details_for_logging(sp, SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)
+            songs_log_str = ", ".join(song_details_for_log)
+            log_message(f"{len(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)} new songs added - {songs_log_str}")
+        else: 
+            log_message(f"{len(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)} new song URIs were added (Spotify client not available for name lookup): {', '.join(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)}")
+    else:
+        # More specific "No new songs added" reasons
+        reason = "An unspecified issue occurred or no new actions were taken." # Default
+        if not target_drive_file:
+            reason = f"target chat archive '{target_archive_name_on_drive}' not found"
+        elif not chat_text_content and target_drive_file: # target_drive_file must exist if chat_text_content is None here
+            reason = f"failed to extract chat content from '{target_drive_file['name']}'"
+        elif chat_text_content and not ordered_spotify_urls:
+            reason = "no Spotify links in chat file"
+        elif chat_text_content and ordered_spotify_urls and not (final_uris_to_add_to_spotify_candidates or SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN) : # check if any candidates were even identified
+            reason = "all found songs already in playlist or were invalid before attempting add"
+        elif chat_text_content and ordered_spotify_urls and final_uris_to_add_to_spotify_candidates and not SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN:
+            reason = "identified new songs but none were successfully added (check previous errors)"
+        elif not chat_text_content and not target_drive_file: # Fallback if drive file itself was not found
+             reason = f"target chat archive '{target_archive_name_on_drive}' not found"
+
+        log_message(f"No new songs added ({reason}).")
 
 if __name__ == "__main__":
     load_dotenv() 
