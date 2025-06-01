@@ -5,7 +5,7 @@ on:
     # Runs at 03:00 UTC every day. Adjust as needed.
     # Example: '0 */6 * * *' would be every 6 hours.
     # Example: '0 10 * * 1-5' would be 10 AM UTC on Weekdays.
-    - cron: '0 3 * * *' 
+    - cron: '30 18 */3 * *' # Runs every 3 days at 18:30 UTC
   workflow_dispatch: # Allows manual triggering from the Actions tab
 
 jobs:
