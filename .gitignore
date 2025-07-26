@@ -6,3 +6,4 @@ __pycache__/
 *.env
 .spotifycache
 gen-lang-client-0464809216-188b012ace24.json
+CREDS.txt
