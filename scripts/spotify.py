@@ -901,15 +901,34 @@ def process_spotify_from_drive():
 
     # --- Final Run Summary Logging ---
     if SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN:
+        # There were new songs added — log everything
         if sp:
-            song_details_for_log = get_track_details_for_logging(sp, SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)
-            songs_log_str = ", ".join(song_details_for_log)
-            final_log_message = f"{len(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)} new songs added - {songs_log_str}"
+            song_details_for_log = get_track_details_for_logging(
+                sp,
+                SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN,
+            )
+            # Cap at 20 tracks for readability
+            max_listed = 20
+            shown = song_details_for_log[:max_listed]
+            remaining = len(song_details_for_log) - len(shown)
+            suffix = f" (+{remaining} more)" if remaining > 0 else ""
+            songs_log_str = ", ".join(shown) + suffix
+            final_log_message = (
+                f"{len(song_details_for_log)} new songs added - {songs_log_str}"
+            )
         else:
-            final_log_message = f"{len(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)} new song URIs were added (Spotify client NA for name lookup): {', '.join(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)}"
+            final_log_message = (
+                f"{len(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)} new song URIs were added "
+                f"(Spotify client unavailable for lookup): "
+                f"{', '.join(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)}"
+            )
 
-    log_message(final_log_message)
+        # Write to file AND print to console
+        log_message(final_log_message)
 
+    else:
+        # No new songs — print to console only, don't write to file
+        print("No new songs added this run.", flush=True)
 
 if __name__ == "__main__":
     load_dotenv()
