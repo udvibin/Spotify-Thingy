@@ -53,6 +53,10 @@ SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN = []
 # Apple Music HTML scraping settings
 APPLE_MUSIC_REQUEST_TIMEOUT = 10  # seconds
 
+# Destructive sync mode: if True, playlist will be reordered to match chat exactly
+# If False (default), only new songs are appended
+ENABLE_DESTRUCTIVE_SYNC = os.getenv("ENABLE_DESTRUCTIVE_SYNC", "false").lower() == "true"
+
 # =============================================================================
 # LOGGING
 # =============================================================================
@@ -879,8 +883,19 @@ def process_spotify_from_drive():
                         if not ordered_track_uris_from_chat:
                             final_log_message = "No new songs added (no valid track URIs derived from chat links)."
                         else:
-                            # --- STEP 7: Sync playlist to match chat exactly ---
-                            sync_playlist_chronologically(sp, target_playlist_id, ordered_track_uris_from_chat)
+                            # --- STEP 7: Sync or Append based on mode ---
+                            if ENABLE_DESTRUCTIVE_SYNC:
+                                print("Running in DESTRUCTIVE SYNC mode - playlist will match chat exactly")
+                                sync_playlist_chronologically(sp, target_playlist_id, ordered_track_uris_from_chat)
+                            else:
+                                print("Running in ADD-ONLY mode - only appending new songs")
+                                existing = set(get_existing_playlist_track_uris_in_order(sp, target_playlist_id))
+                                to_add = [uri for uri in ordered_track_uris_from_chat if uri not in existing]
+                                if to_add:
+                                    add_tracks_to_playlist(sp, target_playlist_id, to_add)
+                                else:
+                                    final_log_message = "No new songs added (all found songs already in playlist)."
+
         else:
             final_log_message = f"No new songs added (failed to extract chat content from '{target_drive_file['name'] if target_drive_file else 'unknown archive'}')."
 
