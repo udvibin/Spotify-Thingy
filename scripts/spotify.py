@@ -146,34 +146,6 @@ def load_spotify_client() -> spotipy.Spotify | None:
         return None
 
 
-def extract_spotify_links_from_text_content(text_content: str) -> list[str]:
-    """
-    Extracts unique Spotify track URLs from chat text content.
-
-    Preserves the order of first appearance (chronological order).
-
-    Args:
-        text_content: Raw text from WhatsApp chat export
-
-    Returns:
-        List of unique Spotify track URLs in order
-    """
-    ordered_unique_urls: list[str] = []
-    seen_urls: set[str] = set()
-
-    # Regex to match Spotify track URLs
-    url_pattern = r"(https?:\/\/open\.spotify\.com\/track\/[a-zA-Z0-9]+)"
-
-    for line_content in text_content.splitlines():
-        found_urls = re.findall(url_pattern, line_content)
-        for url in found_urls:
-            if url not in seen_urls:
-                ordered_unique_urls.append(url)
-                seen_urls.add(url)
-
-    return ordered_unique_urls
-
-
 def get_track_uri_from_url(spotify_url: str) -> str | None:
     """
     Converts a Spotify track URL to a Spotify track URI.
@@ -403,33 +375,8 @@ def get_track_details_for_logging(sp: spotipy.Spotify, track_uris: list[str]) ->
 # - https://music.apple.com/in/playlist/apple-music-live-fred-again/pl.61a35ff1b29d4f19a7be67ed281669d6?ls
 APPLE_MUSIC_URL_PATTERN = r"https?:\/\/music\.apple\.com\/[a-z]{2}\/(?:album|song|playlist)\/[^\/\?]+(?:\/[a-z0-9]+)?(?:\?[^\s]*)?"
 
-
-def extract_apple_music_links_from_text_content(text_content: str) -> list[str]:
-    """
-    Extracts unique Apple Music URLs from chat text, preserving order.
-
-    NOTE: We do NOT strip query params here because ?i= contains the song ID
-    which is essential for resolving the correct track.
-
-    Args:
-        text_content: Raw text from WhatsApp chat export
-
-    Returns:
-        List of unique Apple Music URLs in order
-    """
-    ordered_unique_urls: list[str] = []
-    seen_urls: set[str] = set()
-
-    for line_content in text_content.splitlines():
-        found_urls = re.findall(APPLE_MUSIC_URL_PATTERN, line_content)
-        for url in found_urls:
-            # Remove trailing whitespace
-            url = url.strip()
-            if url and url not in seen_urls:
-                ordered_unique_urls.append(url)
-                seen_urls.add(url)
-
-    return ordered_unique_urls
+# Spotify track URL pattern
+SPOTIFY_URL_PATTERN = r"(https?:\/\/open\.spotify\.com\/track\/[a-zA-Z0-9]+)"
 
 
 def resolve_apple_music_metadata_via_html(url: str) -> dict:
@@ -462,8 +409,6 @@ def resolve_apple_music_metadata_via_html(url: str) -> dict:
     }
 
     # Determine the type of Apple Music link
-    is_song = "/song/" in url
-    is_album = "/album/" in url and "?i=" in url
     is_playlist = "/playlist/" in url
 
     if is_playlist:
@@ -622,6 +567,60 @@ def search_spotify_for_apple_music_track(
 
 
 # =============================================================================
+# UNIFIED LINK EXTRACTION (PRESERVES CHRONOLOGICAL ORDER)
+# =============================================================================
+
+def extract_all_music_links_from_chat(text_content: str) -> list[dict]:
+    """
+    Extracts both Spotify and Apple Music links from chat text content,
+    preserving their original chronological order.
+
+    Each line is processed in order, and all links found in that line
+    are added to the result list in the order they appear.
+
+    Args:
+        text_content: Raw text from WhatsApp chat export
+
+    Returns:
+        List of dicts, each with:
+        {
+            "type": "spotify" | "apple",
+            "url": str,
+            "line_number": int
+        }
+    """
+    links: list[dict] = []
+    seen_urls: set[str] = set()
+
+    for line_number, line_content in enumerate(text_content.splitlines(), start=1):
+        # Find Spotify URLs
+        spotify_matches = re.findall(SPOTIFY_URL_PATTERN, line_content)
+        for url in spotify_matches:
+            url = url.strip()
+            if url and url not in seen_urls:
+                links.append({
+                    "type": "spotify",
+                    "url": url,
+                    "line_number": line_number,
+                })
+                seen_urls.add(url)
+
+        # Find Apple Music URLs
+        apple_matches = re.findall(APPLE_MUSIC_URL_PATTERN, line_content)
+        for url in apple_matches:
+            url = url.strip()
+            if url and url not in seen_urls:
+                links.append({
+                    "type": "apple",
+                    "url": url,
+                    "line_number": line_number,
+                })
+                seen_urls.add(url)
+
+    return links
+
+
+# =============================================================================
 # GOOGLE DRIVE FUNCTIONS
 # =============================================================================
 
@@ -742,8 +741,8 @@ def process_spotify_from_drive():
     1. Authenticate with Google Drive
     2. Download and extract chat text from ZIP
     3. Authenticate with Spotify
-    4. Extract Spotify and Apple Music links from chat
-    5. Convert Apple Music links to Spotify URIs via HTML scraping + search
+    4. Extract all music links (Spotify + Apple) in chronological order
+    5. Convert each link to Spotify URI in order
     6. Sync playlist to match chat exactly
     7. Log the result
     """
@@ -794,52 +793,57 @@ def process_spotify_from_drive():
                 if not target_playlist_id:
                     final_log_message = "No new songs added (Configuration error: missing Spotify playlist ID)."
                 else:
-                    # --- STEP 5: Extract Spotify links from chat ---
-                    ordered_spotify_urls = extract_spotify_links_from_text_content(chat_text_content)
+                    # --- STEP 5: Extract ALL music links in chronological order ---
+                    all_links = extract_all_music_links_from_chat(chat_text_content)
 
-                    # --- STEP 6: Extract Apple Music links from chat ---
-                    ordered_apple_music_urls = extract_apple_music_links_from_text_content(chat_text_content)
-
-                    if not ordered_spotify_urls and not ordered_apple_music_urls:
+                    if not all_links:
                         final_log_message = "No new songs added (no Spotify or Apple Music links in chat file)."
                     else:
-                        # --- STEP 7: Convert Spotify URLs to URIs ---
-                        for url in ordered_spotify_urls:
-                            uri = get_track_uri_from_url(url)
-                            if uri:
-                                ordered_track_uris_from_chat.append(uri)
+                        # Statistics for logging
+                        spotify_count = sum(1 for link in all_links if link["type"] == "spotify")
+                        apple_count = sum(1 for link in all_links if link["type"] == "apple")
+                        print(f"Found {len(all_links)} total links in chat: {spotify_count} Spotify, {apple_count} Apple Music")
 
-                        # --- STEP 8: Convert Apple Music URLs to Spotify URIs ---
+                        # --- STEP 6: Convert each link to Spotify URI in order ---
                         apple_music_converted_count = 0
                         apple_music_skipped_count = 0
                         apple_music_failed_count = 0
 
-                        for url in ordered_apple_music_urls:
-                            # Fetch metadata from Apple Music web page
-                            metadata = resolve_apple_music_metadata_via_html(url)
-
-                            if not metadata["is_valid"]:
-                                if "playlist" in metadata["reason"]:
-                                    log_message(f"Apple Music: Skipping playlist link (unsupported): {url}")
-                                    apple_music_skipped_count += 1
+                        for link in all_links:
+                            if link["type"] == "spotify":
+                                # Direct Spotify URL → URI conversion
+                                uri = get_track_uri_from_url(link["url"])
+                                if uri:
+                                    ordered_track_uris_from_chat.append(uri)
                                 else:
-                                    log_message(f"Apple Music: Could not resolve '{url}' - {metadata['reason']}")
+                                    log_message(f"Spotify: Invalid URL format: {link['url']}")
+
+                            elif link["type"] == "apple":
+                                # Apple Music URL → HTML scrape → Spotify search
+                                metadata = resolve_apple_music_metadata_via_html(link["url"])
+
+                                if not metadata["is_valid"]:
+                                    if "playlist" in metadata["reason"]:
+                                        log_message(f"Apple Music: Skipping playlist link (unsupported): {link['url']}")
+                                        apple_music_skipped_count += 1
+                                    else:
+                                        log_message(f"Apple Music: Could not resolve '{link['url']}' - {metadata['reason']}")
+                                        apple_music_failed_count += 1
+                                    continue
+
+                                # Search Spotify with confidence checks
+                                spotify_uri = search_spotify_for_apple_music_track(
+                                    sp,
+                                    metadata.get("track_name"),
+                                    metadata.get("artist_name"),
+                                    link["url"]
+                                )
+
+                                if spotify_uri:
+                                    ordered_track_uris_from_chat.append(spotify_uri)
+                                    apple_music_converted_count += 1
+                                else:
                                     apple_music_failed_count += 1
-                                continue
-
-                            # Search Spotify with confidence checks
-                            spotify_uri = search_spotify_for_apple_music_track(
-                                sp,
-                                metadata.get("track_name"),
-                                metadata.get("artist_name"),
-                                url
-                            )
-
-                            if spotify_uri:
-                                ordered_track_uris_from_chat.append(spotify_uri)
-                                apple_music_converted_count += 1
-                            else:
-                                apple_music_failed_count += 1
 
                         # Log conversion results
                         if apple_music_converted_count > 0:
@@ -852,7 +856,7 @@ def process_spotify_from_drive():
                         if not ordered_track_uris_from_chat:
                             final_log_message = "No new songs added (no valid track URIs derived from chat links)."
                         else:
-                            # --- STEP 9: Sync playlist to match chat exactly ---
+                            # --- STEP 7: Sync playlist to match chat exactly ---
                             sync_playlist_chronologically(sp, target_playlist_id, ordered_track_uris_from_chat)
         else:
             final_log_message = f"No new songs added (failed to extract chat content from '{target_drive_file['name'] if target_drive_file else 'unknown archive'}')."
