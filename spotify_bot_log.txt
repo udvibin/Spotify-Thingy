@@ -129,3 +129,11 @@
 [2026-01-10 20:17:03 IST] Skipped 1 unsupported Apple Music links (playlists)
 [2026-01-10 20:17:03 IST] Failed to convert 4 Apple Music links
 [2026-01-10 20:17:11 IST] No new songs added (all found songs already in playlist).
+[2026-01-10 20:30:01 IST] Apple Music: Track/artist mismatch for 'Led Zeppelin', skipping to avoid wrong add
+[2026-01-10 20:30:02 IST] Apple Music: Could not resolve 'https://music.apple.com/in/song/winny/1840941762' - failed to fetch page: HTTPError('404 Client Error: Not Found for url: https://music.apple.com/in/song/winny/1840941762')
+[2026-01-10 20:30:03 IST] Apple Music: Track/artist mismatch for 'Stateside (with Zara Larsson)', skipping to avoid wrong add
+[2026-01-10 20:30:05 IST] Apple Music: Track/artist mismatch for 'MaÃ±ana Tepotzlan', skipping to avoid wrong add
+[2026-01-10 20:30:08 IST] Apple Music: Skipping playlist link (unsupported): https://music.apple.com/in/playlist/apple-music-live-fred-again/pl
+[2026-01-10 20:30:08 IST] Skipped 1 unsupported Apple Music links (playlists)
+[2026-01-10 20:30:08 IST] Failed to convert 4 Apple Music links
+[2026-01-10 20:30:14 IST] 2 new songs added - I Destroyed Disco by The Dare, I Want You (She's So Heavy) - 2019 Mix by The Beatles
