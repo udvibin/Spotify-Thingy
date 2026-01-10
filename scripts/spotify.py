@@ -251,6 +251,28 @@ def add_tracks_to_playlist(sp: spotipy.Spotify, playlist_id: str, track_uris_to_
     return len(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)
 
 
+def remove_tracks_from_playlist_in_batches(
+    sp: spotipy.Spotify,
+    playlist_id: str,
+    track_uris_to_remove: list[str],
+    batch_size: int = 100,
+) -> None:
+    """
+    Spotify API removal endpoint has a per-request item limit.
+    Remove tracks in batches to avoid 'Too many ids requested'.
+    """
+    if not track_uris_to_remove:
+        return
+
+    # Spotify remove endpoint supports up to 100 tracks per request.
+    batch_size = max(1, min(batch_size, 100))
+
+    for i in range(0, len(track_uris_to_remove), batch_size):
+        chunk = track_uris_to_remove[i:i + batch_size]
+        sp.playlist_remove_all_occurrences_of_items(playlist_id, chunk)
+        print(f"Removed {len(chunk)} tracks from playlist (batch {i // batch_size + 1}).")
+
+
 def sync_playlist_chronologically(
     sp: spotipy.Spotify,
     playlist_id: str,
@@ -308,8 +330,8 @@ def sync_playlist_chronologically(
     # Remove songs from divergence point onward
     if songs_to_remove:
         try:
-            sp.playlist_remove_all_occurrences_of_items(playlist_id, songs_to_remove)
-            print(f"Removed {len(songs_to_remove)} songs from playlist.")
+            remove_tracks_from_playlist_in_batches(sp, playlist_id, songs_to_remove, batch_size=100)
+            print(f"Removed {len(songs_to_remove)} songs from playlist (total).")
         except Exception as e:
             log_message(f"Error removing songs from playlist: {repr(e)}")
             return False
