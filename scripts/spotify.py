@@ -8,7 +8,7 @@ chronological order.
 Features:
 - Chronological playlist sync (handles manual deletions, out-of-order songs)
 - Spotify link extraction and conversion
-- Apple Music link extraction + Spotify search and conversion
+- Apple Music link extraction via HTML scraping + Spotify search
 - GitHub Actions ready with detailed logging
 
 This script is designed to run on GitHub Actions but can also run locally.
@@ -25,6 +25,8 @@ import zipfile
 import io
 import json
 import pytz
+import requests
+from bs4 import BeautifulSoup
 
 # --- Google API Libraries ---
 from google.oauth2 import service_account
@@ -47,6 +49,9 @@ LOG_FILENAME = "spotify_bot_log.txt"
 
 # Global list to track which song URIs were successfully added this run
 SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN = []
+
+# Apple Music HTML scraping settings
+APPLE_MUSIC_REQUEST_TIMEOUT = 10  # seconds
 
 # =============================================================================
 # LOGGING
@@ -391,15 +396,20 @@ def get_track_details_for_logging(sp: spotipy.Spotify, track_uris: list[str]) ->
 # APPLE MUSIC PARSING & SEARCH
 # =============================================================================
 
-# Pattern to match Apple Music URLs (song or album pages)
-# Matches: https://music.apple.com/us/song/song-name/1234567890
-#          https://music.apple.com/in/album/album-name/1234567890?i=1234567891
-APPLE_MUSIC_URL_PATTERN = r"https?:\/\/music\.apple\.com\/[a-z]{2}\/(?:album|song)\/[^\/]+\/[^\?]+(?:\?i=[0-9]+)?"
+# Pattern to match Apple Music URLs (song, album, or playlist pages)
+# Examples:
+# - https://music.apple.com/in/song/winny/1840941762
+# - https://music.apple.com/in/album/i-want-you-shes-so-heavy/1441164426?i=1441164587&ls
+# - https://music.apple.com/in/playlist/apple-music-live-fred-again/pl.61a35ff1b29d4f19a7be67ed281669d6?ls
+APPLE_MUSIC_URL_PATTERN = r"https?:\/\/music\.apple\.com\/[a-z]{2}\/(?:album|song|playlist)\/[^\/\?]+(?:\/[a-z0-9]+)?(?:\?[^\s]*)?"
 
 
 def extract_apple_music_links_from_text_content(text_content: str) -> list[str]:
     """
     Extracts unique Apple Music URLs from chat text, preserving order.
+
+    NOTE: We do NOT strip query params here because ?i= contains the song ID
+    which is essential for resolving the correct track.
 
     Args:
         text_content: Raw text from WhatsApp chat export
@@ -413,62 +423,102 @@ def extract_apple_music_links_from_text_content(text_content: str) -> list[str]:
     for line_content in text_content.splitlines():
         found_urls = re.findall(APPLE_MUSIC_URL_PATTERN, line_content)
         for url in found_urls:
-            # Normalize URL (remove tracking params, etc.)
-            normalized_url = url.split('?')[0]
-            if normalized_url not in seen_urls:
-                ordered_unique_urls.append(normalized_url)
-                seen_urls.add(normalized_url)
+            # Remove trailing whitespace
+            url = url.strip()
+            if url and url not in seen_urls:
+                ordered_unique_urls.append(url)
+                seen_urls.add(url)
 
     return ordered_unique_urls
 
 
-def extract_metadata_from_apple_music_url(url: str) -> dict:
+def resolve_apple_music_metadata_via_html(url: str) -> dict:
     """
-    Extracts metadata from an Apple Music URL.
+    Fetches an Apple Music web page and extracts track metadata via OG tags.
 
-    Tries to extract:
-    - song_id: The numeric ID from the URL
-    - track_name: Track name if present in URL path
+    This is a free alternative to using the Apple Music API (which requires
+    a paid developer account). It works by scraping the HTML OpenGraph metadata
+    that Apple Music pages include.
 
     Args:
-        url: Apple Music URL (e.g., https://music.apple.com/us/song/starboy/1234567890)
+        url: Apple Music URL (can be song, album with ?i=, or playlist)
 
     Returns:
         Dict with extracted metadata:
         {
             "url": str,
-            "song_id": str | None,
-            "track_name": str | None
+            "track_name": str | None,
+            "artist_name": str | None,
+            "is_valid": bool,
+            "reason": str  # for logging why something failed
         }
     """
     result = {
         "url": url,
-        "song_id": None,
         "track_name": None,
+        "artist_name": None,
+        "is_valid": False,
+        "reason": "unknown",
     }
 
-    # Extract song ID from patterns like:
-    # /song/song-name/1234567890 or ?i=1234567891 or album/1234567890
-    id_patterns = [
-        r"\?i=([0-9]+)",           # ?i=1234567890
-        r"/song/[^/]+/([0-9]+)",   # /song/song-name/1234567890
-        r"/album/[^/]+/([0-9]+)",  # /album/album-name/1234567890
-    ]
+    # Determine the type of Apple Music link
+    is_song = "/song/" in url
+    is_album = "/album/" in url and "?i=" in url
+    is_playlist = "/playlist/" in url
 
-    for pattern in id_patterns:
-        id_match = re.search(pattern, url)
-        if id_match:
-            result["song_id"] = id_match.group(1)
-            break
+    if is_playlist:
+        result["reason"] = "playlist links not supported (requires Apple Music API)"
+        return result
 
-    # Try to extract track name from URL path
-    # URL format: /song/track-name/1234567890 or /album/album-name/1234567890
-    path_match = re.search(r"music\.apple\.com\/[a-z]{2}\/(?:song)\/([^\/]+)\/?", url)
-    if path_match:
-        # Convert URL-encoded/hyphenated name to readable format
-        potential_track = path_match.group(1).replace('-', ' ').replace('%20', ' ').strip()
-        if len(potential_track) > 2:
-            result["track_name"] = potential_track
+    # Set User-Agent to avoid being blocked by Apple
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=APPLE_MUSIC_REQUEST_TIMEOUT)
+        response.raise_for_status()
+        html_content = response.text
+    except requests.RequestException as e:
+        result["reason"] = f"failed to fetch page: {repr(e)}"
+        return result
+
+    # Parse HTML with BeautifulSoup
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    # Try to extract metadata from OG tags
+    # Format: "Track Name by Artist Name" or just "Track Name"
+    og_title = soup.find("meta", property="og:title")
+    if og_title and og_title.get("content"):
+        title_content = og_title["content"].strip()
+
+        # Parse "Track Name by Artist Name" format
+        if " by " in title_content:
+            parts = title_content.rsplit(" by ", 1)
+            result["track_name"] = parts[0].strip()
+            result["artist_name"] = parts[1].strip()
+        else:
+            result["track_name"] = title_content
+
+    # Fallback: try to find artist from other meta tags
+    if not result["artist_name"]:
+        og_description = soup.find("meta", property="og:description")
+        if og_description and og_description.get("content"):
+            desc = og_description["content"]
+            # Often format: "Artist Name • Album Name" or similar
+            if "•" in desc:
+                artist_part = desc.split("•")[0].strip()
+                if len(artist_part) > 0 and len(artist_part) < 100:
+                    result["artist_name"] = artist_part
+
+    # Final validation
+    if result["track_name"]:
+        result["is_valid"] = True
+        result["reason"] = "success"
+    else:
+        result["reason"] = "could not extract track name from page"
 
     return result
 
@@ -476,50 +526,98 @@ def extract_metadata_from_apple_music_url(url: str) -> dict:
 def search_spotify_for_apple_music_track(
     sp: spotipy.Spotify,
     track_name: str | None,
-    song_id: str | None
+    artist_name: str | None,
+    apple_url: str
 ) -> str | None:
     """
     Searches Spotify for a track matching the Apple Music metadata.
 
-    Uses the track name to search Spotify. Falls back to looser search
-    if exact match fails.
+    Uses confidence-based matching:
+    1. Search with track + artist (exact-ish)
+    2. Validate match quality (normalized title match, artist contains)
+    3. If confidence too low, skip rather than add wrong song
 
     Args:
         sp: Spotipy client
-        track_name: Track name extracted from Apple Music URL (may be None)
-        song_id: Apple Music song ID (for logging only)
+        track_name: Track name extracted from Apple Music page
+        artist_name: Artist name extracted from Apple Music page (may be None)
+        apple_url: Original Apple Music URL (for logging)
 
     Returns:
-        Spotify track URI or None if not found
+        Spotify track URI or None if not found / confidence too low
     """
     if not track_name:
-        log_message(f"Apple Music: No track name to search for ID {song_id}")
+        log_message(f"Apple Music: No track name for '{apple_url}'")
         return None
 
-    # Try exact search first with quotes around track name
-    query = f'"{track_name}" type:track'
+    # Build search query
+    # Prefer exact track + artist search
+    if artist_name:
+        query = f'track:"{track_name}" artist:"{artist_name}"'
+    else:
+        query = f'track:"{track_name}"'
 
     try:
-        results = sp.search(q=query, limit=5, type='track')
+        results = sp.search(q=query, limit=10, type='track')
         tracks = results.get('tracks', {}).get('items', [])
 
-        if tracks:
-            # Return the first exact match
-            return tracks[0]['uri']
+        if not tracks:
+            # Fallback: looser search without quotes
+            fallback_query = f"{track_name} {artist_name or ''}".strip()
+            results = sp.search(q=fallback_query, limit=10, type='track')
+            tracks = results.get('tracks', {}).get('items', [])
 
-        # Fallback: try looser search without exact quotes
-        loose_query = f"{track_name} type:track"
-        loose_results = sp.search(q=loose_query, limit=10, type='track')
-        loose_tracks = loose_results.get('tracks', {}).get('items', [])
+            if not tracks:
+                log_message(f"Apple Music: No Spotify match for '{track_name}' ({artist_name or 'unknown artist'})")
+                return None
 
-        if loose_tracks:
-            return loose_tracks[0]['uri']
+        # Evaluate confidence of best match
+        best_match = tracks[0]
+        matched_track_name = best_match.get('name', '').lower()
+        matched_artist_names = [a.get('name', '').lower() for a in best_match.get('artists', [])]
+        input_track_name = track_name.lower()
+        input_artist_name = artist_name.lower() if artist_name else None
 
-        log_message(f"Apple Music: Could not find Spotify match for '{track_name}'")
-        return None
+        # Normalize for comparison (remove special chars, extra spaces)
+        def normalize(s: str) -> str:
+            return re.sub(r"[^\w\s]", "", s).replace("/", " ").replace("-", " ").replace("_", " ").lower()
+
+        norm_input_track = normalize(input_track_name)
+        norm_matched_track = normalize(matched_track_name)
+
+        # Check if track names are reasonably similar
+        track_name_match = (
+            norm_input_track == norm_matched_track or
+            norm_input_track in norm_matched_track or
+            norm_matched_track in norm_input_track
+        )
+
+        # Check artist match if we have artist name
+        artist_match = True
+        if input_artist_name:
+            norm_input_artist = normalize(input_artist_name)
+            artist_match = any(
+                norm_input_artist in normalize(a) or normalize(a) in norm_input_artist
+                for a in matched_artist_names
+            )
+
+        # Confidence threshold
+        if track_name_match and artist_match:
+            # High confidence - accept the match
+            return best_match['uri']
+        elif track_name_match and not artist_name:
+            # Medium confidence (no artist to verify) - accept if track name is exact-ish
+            if norm_input_track == norm_matched_track:
+                return best_match['uri']
+            else:
+                log_message(f"Apple Music: Low confidence match for '{track_name}', skipping to avoid wrong add")
+                return None
+        else:
+            log_message(f"Apple Music: Track/artist mismatch for '{track_name}', skipping to avoid wrong add")
+            return None
 
     except Exception as e:
-        log_message(f"Apple Music search error: {repr(e)}")
+        log_message(f"Apple Music search error for '{track_name}': {repr(e)}")
         return None
 
 
@@ -645,7 +743,7 @@ def process_spotify_from_drive():
     2. Download and extract chat text from ZIP
     3. Authenticate with Spotify
     4. Extract Spotify and Apple Music links from chat
-    5. Convert Apple Music links to Spotify URIs via search
+    5. Convert Apple Music links to Spotify URIs via HTML scraping + search
     6. Sync playlist to match chat exactly
     7. Log the result
     """
@@ -713,24 +811,41 @@ def process_spotify_from_drive():
 
                         # --- STEP 8: Convert Apple Music URLs to Spotify URIs ---
                         apple_music_converted_count = 0
+                        apple_music_skipped_count = 0
                         apple_music_failed_count = 0
 
                         for url in ordered_apple_music_urls:
-                            metadata = extract_metadata_from_apple_music_url(url)
+                            # Fetch metadata from Apple Music web page
+                            metadata = resolve_apple_music_metadata_via_html(url)
+
+                            if not metadata["is_valid"]:
+                                if "playlist" in metadata["reason"]:
+                                    log_message(f"Apple Music: Skipping playlist link (unsupported): {url}")
+                                    apple_music_skipped_count += 1
+                                else:
+                                    log_message(f"Apple Music: Could not resolve '{url}' - {metadata['reason']}")
+                                    apple_music_failed_count += 1
+                                continue
+
+                            # Search Spotify with confidence checks
                             spotify_uri = search_spotify_for_apple_music_track(
                                 sp,
                                 metadata.get("track_name"),
-                                metadata.get("song_id")
+                                metadata.get("artist_name"),
+                                url
                             )
+
                             if spotify_uri:
                                 ordered_track_uris_from_chat.append(spotify_uri)
                                 apple_music_converted_count += 1
                             else:
                                 apple_music_failed_count += 1
-                                log_message(f"Apple Music: Could not convert '{url}' to Spotify")
 
+                        # Log conversion results
                         if apple_music_converted_count > 0:
                             print(f"Converted {apple_music_converted_count} Apple Music links to Spotify")
+                        if apple_music_skipped_count > 0:
+                            log_message(f"Skipped {apple_music_skipped_count} unsupported Apple Music links (playlists)")
                         if apple_music_failed_count > 0:
                             log_message(f"Failed to convert {apple_music_failed_count} Apple Music links")
 

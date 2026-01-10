@@ -5,3 +5,5 @@ google-auth-httplib2
 google-auth-oauthlib
 pytz
 google-cloud-secret-manager
+requests
+beautifulsoup4
