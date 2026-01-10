@@ -2,27 +2,32 @@ name: Spotify Playlist Updater from Drive
 
 on:
   schedule:
-    # Runs at 03:00 UTC every day. Adjust as needed.
-    # Example: '0 */6 * * *' would be every 6 hours.
-    # Example: '0 10 * * 1-5' would be 10 AM UTC on Weekdays.
-    - cron: '30 18 */3 * *' # Runs every 3 days at 18:30 UTC
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+    # Runs every 3 days at 18:30 UTC (00:00 IST)
+    - cron: "0 18 */3 * *"
+  workflow_dispatch:
+
+# Prevent overlapping runs (manual + scheduled, or multiple manual runs)
+concurrency:
+  group: spotify-thingy-main
+  cancel-in-progress: true
 
 jobs:
   update-playlist:
     runs-on: ubuntu-latest
-    
-    permissions: # Add this section to allow writing back to the repo for logs
-      contents: write # Allows the action to commit to the repository
+
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # helpful when we git pull --rebase before pushing
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -44,13 +49,32 @@ jobs:
       - name: Commit and Push Log File
         if: always()
         run: |
+          set -e
+
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
           if [ -f spotify_bot_log.txt ] && [ -s spotify_bot_log.txt ]; then
             git add spotify_bot_log.txt
+
             if ! git diff --staged --quiet; then
               git commit -m "Update Spotify bot log $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-              git push || (sleep 5 && git push) || echo "Failed to push log file after retry."
+
+              # Rebase onto latest main before pushing (avoids non-fast-forward rejects)
+              git pull --rebase origin main
+
+              # Retry push in case something else updated main between pull and push
+              for i in 1 2 3; do
+                if git push; then
+                  exit 0
+                fi
+                echo "Push failed, retrying in 5s ($i/3)..."
+                sleep 5
+                git pull --rebase origin main
+              done
+
+              echo "Failed to push after retries."
+              exit 1
             else
               echo "No changes to log file to commit."
             fi
