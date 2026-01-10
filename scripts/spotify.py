@@ -655,40 +655,41 @@ def load_google_drive_service():
         return None
 
 
-def get_target_archive_file(service, input_folder_id: str, target_archive_filename: str):
+def get_target_archive_file(service, input_folder_id, target_archive_filename):
     """
-    Finds the WhatsApp chat ZIP file in Google Drive.
+    Finds the most recently modified Drive file in the folder whose name matches
+    either:
+      - target_archive_filename
+      - target_archive_filename + ".zip" (if not already ending with .zip)
 
-    Searches the specified folder for a file matching the target filename.
-    Returns the most recently modified matching file.
-
-    Args:
-        service: Google Drive service instance
-        input_folder_id: Google Drive folder ID to search in
-        target_archive_filename: Name of the ZIP file (without .zip extension)
-
-    Returns:
-        File metadata dict or None if not found
+    Returns the latest match (by modifiedTime).
     """
     if not input_folder_id or not target_archive_filename:
         return None
 
+    name_a = target_archive_filename
+    name_b = (
+        target_archive_filename
+        if target_archive_filename.lower().endswith(".zip")
+        else f"{target_archive_filename}.zip"
+    )
+
     try:
-        # Query: file is in the folder, has exact name, not trashed
-        query = f"'{input_folder_id}' in parents and name = '{target_archive_filename}' and trashed=false"
+        # Note: orderBy ensures we get the latest match first.
+        query = (
+            f"'{input_folder_id}' in parents and trashed=false and "
+            f"(name = '{name_a}' or name = '{name_b}')"
+        )
         results = service.files().list(
             q=query,
             pageSize=1,
             fields="files(id, name, modifiedTime, mimeType)",
-            orderBy="modifiedTime desc"
+            orderBy="modifiedTime desc",
         ).execute()
-
-        items = results.get('files', [])
+        items = results.get("files", [])
         if not items:
             return None
-
         return items[0]
-
     except Exception as e:
         log_message(f"Error finding target archive in Drive: {repr(e)}")
         return None
