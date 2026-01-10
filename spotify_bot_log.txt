@@ -45,3 +45,10 @@
 [2026-01-10 17:20:04 IST] Apple Music: Could not convert 'https://music.apple.com/in/album/prague/1818817424' to Spotify
 [2026-01-10 17:20:04 IST] Failed to convert 9 Apple Music links
 [2026-01-10 17:20:07 IST] 1 new songs added - Last Call by Kanye West
+[2026-01-10 18:38:30 IST] Apple Music: Track/artist mismatch for 'Led Zeppelin', skipping to avoid wrong add
+[2026-01-10 18:38:31 IST] Apple Music: Could not resolve 'https://music.apple.com/in/song/winny/1840941762' - failed to fetch page: HTTPError('404 Client Error: Not Found for url: https://music.apple.com/in/song/winny/1840941762')
+[2026-01-10 18:38:34 IST] Apple Music: Track/artist mismatch for 'MaÃ±ana Tepotzlan', skipping to avoid wrong add
+[2026-01-10 18:38:38 IST] Apple Music: Skipping playlist link (unsupported): https://music.apple.com/in/playlist/apple-music-live-fred-again/pl
+[2026-01-10 18:38:38 IST] Skipped 1 unsupported Apple Music links (playlists)
+[2026-01-10 18:38:38 IST] Failed to convert 3 Apple Music links
+[2026-01-10 18:38:41 IST] 7 new songs added - Rock and Roll - Remaster by Led Zeppelin, I Destroyed Disco by The Dare, Stateside by PinkPantheress, Suspirium by Thom Yorke, Nowhere Man - Remastered 2009 by The Beatles, I Want You (She's So Heavy) - 2019 Mix by The Beatles, Prague by EsDeeKid
