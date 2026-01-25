@@ -39,3 +39,10 @@
 [2026-01-23 00:12:09 IST] Apple Music: Skipping playlist link (unsupported): https://music.apple.com/in/playlist/apple-music-live-fred-again/pl
 [2026-01-23 00:12:09 IST] Skipped 1 unsupported Apple Music links (playlists)
 [2026-01-23 00:12:09 IST] Failed to convert 4 Apple Music links
+[2026-01-26 00:07:37 IST] Apple Music: Track/artist mismatch for 'Led Zeppelin', skipping to avoid wrong add
+[2026-01-26 00:07:38 IST] Apple Music: Could not resolve 'https://music.apple.com/in/song/winny/1840941762' - failed to fetch page: HTTPError('404 Client Error: Not Found for url: https://music.apple.com/in/song/winny/1840941762')
+[2026-01-26 00:07:40 IST] Apple Music: Track/artist mismatch for 'Stateside (with Zara Larsson)', skipping to avoid wrong add
+[2026-01-26 00:07:42 IST] Apple Music: Track/artist mismatch for 'MaÃ±ana Tepotzlan', skipping to avoid wrong add
+[2026-01-26 00:07:46 IST] Apple Music: Skipping playlist link (unsupported): https://music.apple.com/in/playlist/apple-music-live-fred-again/pl
+[2026-01-26 00:07:46 IST] Skipped 1 unsupported Apple Music links (playlists)
+[2026-01-26 00:07:46 IST] Failed to convert 4 Apple Music links
