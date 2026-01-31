@@ -1,22 +1,44 @@
 # WhatsApp → Spotify Playlist Sync
 
-A GitHub Actions workflow that automatically syncs a Spotify playlist with Spotify links found in a WhatsApp chat export (ZIP file from Google Drive).
+A GitHub Actions workflow that automatically syncs a Spotify playlist with music links found in a WhatsApp chat export (ZIP file from Google Drive).
 
 ## How It Works
 
 1. **Fetches** the latest WhatsApp chat export (ZIP) from a Google Drive folder
-2. **Extracts** Spotify track links from the chat text file inside the ZIP
-3. **Syncs** your Spotify playlist to match the chat exactly in chronological order:
-   - If you manually delete a song from the playlist, the script brings it back
-   - If you add older chat exports (e.g., 2022 songs), they get inserted at the correct chronological position
-4. **Logs** the result with a timestamp in IST
+2. **Extracts** Spotify and Apple Music track links from the chat text file
+3. **Converts** Apple Music links to Spotify tracks via HTML scraping + search
+4. **Syncs** your Spotify playlist based on the selected mode
+
+## Sync Modes
+
+### Append-Only Mode (default)
+- Only adds **new** songs to the **end** of the playlist
+- Does NOT reorder existing songs
+- Safe for manual playlist curation
+- Set `ENABLE_DESTRUCTIVE_SYNC=false` (or omit)
+
+### Destructive Sync Mode
+- Reorders playlist to match chat **exactly** in chronological order
+- Re-adds manually deleted songs
+- Inserts older songs at correct chronological positions
+- Set `ENABLE_DESTRUCTIVE_SYNC=true`
+
+## Supported Links
+
+| Platform | Link Type | Support |
+|----------|-----------|---------|
+| Spotify | Track URLs | ✅ Full support |
+| Apple Music | Song URLs | ✅ Via HTML scraping |
+| Apple Music | Album URLs with `?i=` track param | ✅ Via HTML scraping |
+| Apple Music | Playlist URLs | ❌ Not supported |
 
 ## Features
 
-- **Chronological Order**: Playlist mirrors the exact order of songs in the chat file
-- **Divergence Detection**: Automatically fixes manual deletions or out-of-order songs
-- **Duplicate Prevention**: Each track appears only once in the playlist
-- **GitHub Actions Automation**: Runs on a schedule or manually
+- **Chronological Order**: Preserves the order songs were shared in chat
+- **Duplicate Prevention**: Each track appears only once (even if shared as both Spotify and Apple Music links)
+- **Confidence Matching**: Apple Music → Spotify conversion validates track/artist match to avoid wrong songs
+- **Clean Logging**: Single-line log entries with song count and issue summary
+- **GitHub Actions Ready**: Runs on schedule or manually
 
 ## Setup
 
@@ -26,78 +48,84 @@ A GitHub Actions workflow that automatically syncs a Spotify playlist with Spoti
 2. Enable the **Google Drive API**
 3. Create a **Service Account**
 4. Download the JSON key file
-5. Share the WhatsApp chat ZIP file (or its parent folder) with the Service Account email (`...@project.iam.gserviceaccount.com`)
+5. Share the Drive folder with the Service Account email
 
-### 2. GitHub Secrets & Variables
-
-Add these to your GitHub repo:
-
-**Secrets:**
-- `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` → Full JSON content of your service account key
-- `SPOTIPY_CLIENT_ID` → Spotify Developer Client ID
-- `SPOTIPY_CLIENT_SECRET` → Spotify Developer Client Secret
-- `SPOTIPY_REDIRECT_URI` → Spotify Redirect URI (e.g., `http://localhost:8888/callback`)
-- `SPOTIPY_CACHE_CONTENT` → Spotify token cache (get this by running locally once)
-- `TARGET_PLAYLIST_ID` → Your Spotify Playlist ID (from the playlist URL)
-
-**Variables:**
-- `GOOGLE_DRIVE_INPUT_FOLDER_ID` → The folder ID in Google Drive containing the WhatsApp ZIP
-- `TARGET_DRIVE_ARCHIVE_FILENAME` → (Optional) Exact name of the ZIP file in Drive
-
-### 3. Spotify Developer Setup
+### 2. Spotify Developer Setup
 
 1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 2. Create an app
-3. Set the **Redirect URI** to match `SPOTIPY_REDIRECT_URI`
+3. Set the **Redirect URI** (e.g., `http://localhost:8888/callback`)
 4. Get your Client ID and Secret
 
-### 4. Get Spotify Cache Token
+### 3. Get Spotify Token Cache
 
-Run this locally once to generate the cache:
+Run locally once to authenticate:
 
 ```bash
+pip install -r requirements.txt
 python scripts/spotify.py
 ```
 
-It will open a browser for authentication. After successful auth, copy the contents of `.spotifycache` and add it as a GitHub secret (`SPOTIPY_CACHE_CONTENT`).
+After browser auth, copy `.spotifycache` contents to `SPOTIPY_CACHE_CONTENT` secret.
 
-## Workflow
+### 4. GitHub Secrets & Variables
 
-The workflow runs automatically every 3 days at 18:30 UTC. You can also trigger it manually from the Actions tab.
+**Secrets:**
+| Name | Description |
+|------|-------------|
+| `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` | Full JSON of service account key |
+| `SPOTIPY_CLIENT_ID` | Spotify app Client ID |
+| `SPOTIPY_CLIENT_SECRET` | Spotify app Client Secret |
+| `SPOTIPY_REDIRECT_URI` | Spotify redirect URI |
+| `SPOTIPY_CACHE_CONTENT` | Contents of `.spotifycache` file |
+| `TARGET_PLAYLIST_ID` | Spotify playlist ID (from URL) |
+
+**Variables:**
+| Name | Description |
+|------|-------------|
+| `GOOGLE_DRIVE_INPUT_FOLDER_ID` | Drive folder ID containing the ZIP |
+| `TARGET_DRIVE_ARCHIVE_FILENAME` | ZIP filename (optional, has default) |
+| `ENABLE_DESTRUCTIVE_SYNC` | `true` for full sync, `false` for append-only |
+
+## Log Format
+
+[2026-01-31 13:00:00 IST] 5 songs added: Song1 by Artist1, Song2 by Artist2 (+3 more) | Issues: 4 Apple links failed
+
+When no new songs but issues exist:
+
+[2026-01-31 13:00:00 IST] No new songs added | 4 Apple links failed
+
+Silent (no log entry) when nothing to add and no issues.
 
 ## Directory Structure
 
 ├── .github/workflows/
 
-│   └── spotify-update.yml      # GitHub Actions workflow
+│   └── spotify-automation.yaml   # GitHub Actions workflow
 
 ├── scripts/
 
-│   └── spotify.py              # Main script
+│   └── spotify.py                # Main script
 
-├── requirements.txt            # Python dependencies
+├── requirements.txt              # Python dependencies
 
 ├── .gitignore
 
-├── .spotifycache               # Generated locally (gitignored)
+├── .spotifycache                 # Generated locally (gitignored)
 
-├── spotify_bot_log.txt         # Generated log file
+├── spotify_bot_log.txt           # Run history log
 
 └── README.md
 
+
 ## Troubleshooting
 
-### "Google Drive authentication failure"
-- Check that `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` is valid JSON
-- Ensure the Service Account has access to the Drive folder/file
-
-### "Spotify authentication failure"
-- Verify `SPOTIPY_CLIENT_ID` and `SPOTIPY_CLIENT_SECRET`
-- Ensure `SPOTIPY_CACHE_CONTENT` is valid and not expired
-
-### "Target chat archive not found"
-- Check `GOOGLE_DRIVE_INPUT_FOLDER_ID`
-- Verify the ZIP file name matches `TARGET_DRIVE_ARCHIVE_FILENAME`
+| Error | Solution |
+|-------|----------|
+| Google Drive authentication failure | Check `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` is valid JSON |
+| Spotify authentication failure | Verify credentials; regenerate `.spotifycache` if expired |
+| Target chat archive not found | Check folder ID and filename match |
+| Apple Music links failing | Normal for removed songs, playlists, or region-locked content |
 
 ## License
 

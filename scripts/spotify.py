@@ -319,7 +319,7 @@ def sync_playlist_chronologically(
     if divergence_index is None:
         # No divergence found in the overlapping portion
         if len(ordered_track_uris_from_chat) == len(existing_uris):
-            log_message("Playlist is already in sync with chat file. No changes needed.")
+            print("Playlist already in sync. No changes needed.")  # Console only, not log file
             return True
         else:
             # Chat has more songs than playlist → add the remainder
@@ -370,20 +370,22 @@ def get_track_details_for_logging(sp: spotipy.Spotify, track_uris: list[str]) ->
         chunk_uris = track_uris[i:i + 50]
         try:
             tracks_info = sp.tracks(tracks=chunk_uris)
-            for track_data in tracks_info['tracks']:
-                if track_data:
-                    name = track_data['name']
-                    artists = ", ".join([artist['name'] for artist in track_data['artists']])
-                    track_details_list.append(f"{name} by {artists}")
-                else:
-                    # Handle case where API returns null for a track ID
-                    failed_uri_index = -1
-                    try:
-                        failed_uri_index = tracks_info['tracks'].index(track_data)
-                    except ValueError:
-                        pass
-                    failed_uri = chunk_uris[failed_uri_index] if 0 <= failed_uri_index < len(chunk_uris) else "UnknownURI"
-                    track_details_list.append(f"Unknown Track (URI: {failed_uri})")
+            if tracks_info and 'tracks' in tracks_info:
+                for track_data in tracks_info['tracks']:
+                    if track_data:
+                        name = track_data['name']
+                        artists = ", ".join([artist['name'] for artist in track_data['artists']])
+                        track_details_list.append(f"{name} by {artists}")
+                    else:
+                        # Handle case where API returns null for a track ID
+                        failed_uri_index = -1
+                        try:
+                            if tracks_info and 'tracks' in tracks_info:
+                                failed_uri_index = tracks_info['tracks'].index(track_data)
+                        except ValueError:
+                            pass
+                        failed_uri = chunk_uris[failed_uri_index] if 0 <= failed_uri_index < len(chunk_uris) else "UnknownURI"
+                        track_details_list.append(f"Unknown Track (URI: {failed_uri})")
         except Exception as e:
             track_details_list.extend([f"ErrorFetchingTrackDetailsForURI({uri})" for uri in chunk_uris])
 
@@ -463,7 +465,7 @@ def resolve_apple_music_metadata_via_html(url: str) -> dict:
     # Format: "Track Name by Artist Name" or just "Track Name"
     og_title = soup.find("meta", property="og:title")
     if og_title and og_title.get("content"):
-        title_content = og_title["content"].strip()
+        title_content = str(og_title["content"]).strip()
 
         # Parse "Track Name by Artist Name" format
         if " by " in title_content:
@@ -477,7 +479,7 @@ def resolve_apple_music_metadata_via_html(url: str) -> dict:
     if not result["artist_name"]:
         og_description = soup.find("meta", property="og:description")
         if og_description and og_description.get("content"):
-            desc = og_description["content"]
+            desc = str(og_description["content"])
             # Often format: "Artist Name • Album Name" or similar
             if "•" in desc:
                 artist_part = desc.split("•")[0].strip()
@@ -502,27 +504,12 @@ def search_spotify_for_apple_music_track(
 ) -> str | None:
     """
     Searches Spotify for a track matching the Apple Music metadata.
-
-    Uses confidence-based matching:
-    1. Search with track + artist (exact-ish)
-    2. Validate match quality (normalized title match, artist contains)
-    3. If confidence too low, skip rather than add wrong song
-
-    Args:
-        sp: Spotipy client
-        track_name: Track name extracted from Apple Music page
-        artist_name: Artist name extracted from Apple Music page (may be None)
-        apple_url: Original Apple Music URL (for logging)
-
-    Returns:
-        Spotify track URI or None if not found / confidence too low
+    Returns Spotify track URI or None if not found / confidence too low.
     """
     if not track_name:
-        log_message(f"Apple Music: No track name for '{apple_url}'")
         return None
 
     # Build search query
-    # Prefer exact track + artist search
     if artist_name:
         query = f'track:"{track_name}" artist:"{artist_name}"'
     else:
@@ -530,16 +517,25 @@ def search_spotify_for_apple_music_track(
 
     try:
         results = sp.search(q=query, limit=10, type='track')
-        tracks = results.get('tracks', {}).get('items', [])
+        if not results:
+            return None
+        tracks_info = results.get('tracks')
+        if not tracks_info:
+            return None
+        tracks = tracks_info.get('items', [])
 
         if not tracks:
             # Fallback: looser search without quotes
             fallback_query = f"{track_name} {artist_name or ''}".strip()
             results = sp.search(q=fallback_query, limit=10, type='track')
-            tracks = results.get('tracks', {}).get('items', [])
+            if not results:
+                return None
+            tracks_info = results.get('tracks')
+            if not tracks_info:
+                return None
+            tracks = tracks_info.get('items', [])
 
             if not tracks:
-                log_message(f"Apple Music: No Spotify match for '{track_name}' ({artist_name or 'unknown artist'})")
                 return None
 
         # Evaluate confidence of best match
@@ -549,21 +545,18 @@ def search_spotify_for_apple_music_track(
         input_track_name = track_name.lower()
         input_artist_name = artist_name.lower() if artist_name else None
 
-        # Normalize for comparison (remove special chars, extra spaces)
         def normalize(s: str) -> str:
             return re.sub(r"[^\w\s]", "", s).replace("/", " ").replace("-", " ").replace("_", " ").lower()
 
         norm_input_track = normalize(input_track_name)
         norm_matched_track = normalize(matched_track_name)
 
-        # Check if track names are reasonably similar
         track_name_match = (
             norm_input_track == norm_matched_track or
             norm_input_track in norm_matched_track or
             norm_matched_track in norm_input_track
         )
 
-        # Check artist match if we have artist name
         artist_match = True
         if input_artist_name:
             norm_input_artist = normalize(input_artist_name)
@@ -572,23 +565,15 @@ def search_spotify_for_apple_music_track(
                 for a in matched_artist_names
             )
 
-        # Confidence threshold
         if track_name_match and artist_match:
-            # High confidence - accept the match
             return best_match['uri']
         elif track_name_match and not artist_name:
-            # Medium confidence (no artist to verify) - accept if track name is exact-ish
             if norm_input_track == norm_matched_track:
                 return best_match['uri']
-            else:
-                log_message(f"Apple Music: Low confidence match for '{track_name}', skipping to avoid wrong add")
-                return None
-        else:
-            log_message(f"Apple Music: Track/artist mismatch for '{track_name}', skipping to avoid wrong add")
-            return None
+        
+        return None
 
-    except Exception as e:
-        log_message(f"Apple Music search error for '{track_name}': {repr(e)}")
+    except Exception:
         return None
 
 
@@ -801,6 +786,10 @@ def process_spotify_from_drive():
     chat_text_content = None
     ordered_track_uris_from_chat: list[str] = []
 
+    # Tracking variables for final log summary
+    total_apple_issues = 0
+    spotify_invalid_count = 0
+
     if not target_drive_file:
         final_log_message = f"No new songs added (Target chat archive '{target_archive_name_on_drive}' not found)."
     else:
@@ -824,41 +813,31 @@ def process_spotify_from_drive():
                     all_links = extract_all_music_links_from_chat(chat_text_content)
 
                     if not all_links:
-                        final_log_message = "No new songs added (no Spotify or Apple Music links in chat file)."
+                        final_log_message = "No new songs added (no music links found in chat)"
                     else:
-                        # Statistics for logging
-                        spotify_count = sum(1 for link in all_links if link["type"] == "spotify")
-                        apple_count = sum(1 for link in all_links if link["type"] == "apple")
-                        print(f"Found {len(all_links)} total links in chat: {spotify_count} Spotify, {apple_count} Apple Music")
-
-                        # --- STEP 6: Convert each link to Spotify URI in order ---
-                        apple_music_converted_count = 0
-                        apple_music_skipped_count = 0
+                        # --- STEP 6: Convert each link to Spotify URI ---
                         apple_music_failed_count = 0
+                        apple_music_playlist_count = 0
+                        spotify_invalid_count = 0
 
                         for link in all_links:
                             if link["type"] == "spotify":
-                                # Direct Spotify URL → URI conversion
                                 uri = get_track_uri_from_url(link["url"])
                                 if uri:
                                     ordered_track_uris_from_chat.append(uri)
                                 else:
-                                    log_message(f"Spotify: Invalid URL format: {link['url']}")
+                                    spotify_invalid_count += 1
 
                             elif link["type"] == "apple":
-                                # Apple Music URL → HTML scrape → Spotify search
                                 metadata = resolve_apple_music_metadata_via_html(link["url"])
 
                                 if not metadata["is_valid"]:
                                     if "playlist" in metadata["reason"]:
-                                        log_message(f"Apple Music: Skipping playlist link (unsupported): {link['url']}")
-                                        apple_music_skipped_count += 1
+                                        apple_music_playlist_count += 1
                                     else:
-                                        log_message(f"Apple Music: Could not resolve '{link['url']}' - {metadata['reason']}")
                                         apple_music_failed_count += 1
                                     continue
 
-                                # Search Spotify with confidence checks
                                 spotify_uri = search_spotify_for_apple_music_track(
                                     sp,
                                     metadata.get("track_name"),
@@ -868,67 +847,78 @@ def process_spotify_from_drive():
 
                                 if spotify_uri:
                                     ordered_track_uris_from_chat.append(spotify_uri)
-                                    apple_music_converted_count += 1
                                 else:
                                     apple_music_failed_count += 1
 
-                        # Log conversion results
-                        if apple_music_converted_count > 0:
-                            print(f"Converted {apple_music_converted_count} Apple Music links to Spotify")
-                        if apple_music_skipped_count > 0:
-                            log_message(f"Skipped {apple_music_skipped_count} unsupported Apple Music links (playlists)")
-                        if apple_music_failed_count > 0:
-                            log_message(f"Failed to convert {apple_music_failed_count} Apple Music links")
+                        # --- Deduplicate URIs while preserving order ---
+                        seen_uris: set[str] = set()
+                        unique_ordered_uris: list[str] = []
+                        for uri in ordered_track_uris_from_chat:
+                            if uri not in seen_uris:
+                                seen_uris.add(uri)
+                                unique_ordered_uris.append(uri)
+                        ordered_track_uris_from_chat = unique_ordered_uris
+
+                        # Track issues for final log
+                        total_apple_issues = apple_music_failed_count + apple_music_playlist_count
 
                         if not ordered_track_uris_from_chat:
-                            final_log_message = "No new songs added (no valid track URIs derived from chat links)."
+                            final_log_message = "No new songs added (no valid tracks derived from links)"
                         else:
-                            # --- STEP 7: Sync or Append based on mode ---
+                            # --- STEP 7: Sync or Append ---
                             if ENABLE_DESTRUCTIVE_SYNC:
-                                print("Running in DESTRUCTIVE SYNC mode - playlist will match chat exactly")
                                 sync_playlist_chronologically(sp, target_playlist_id, ordered_track_uris_from_chat)
                             else:
-                                print("Running in ADD-ONLY mode - only appending new songs")
                                 existing = set(get_existing_playlist_track_uris_in_order(sp, target_playlist_id))
                                 to_add = [uri for uri in ordered_track_uris_from_chat if uri not in existing]
                                 if to_add:
                                     add_tracks_to_playlist(sp, target_playlist_id, to_add)
+                                # else: no new songs - final_log_message set below
                                 else:
                                     final_log_message = "No new songs added (all found songs already in playlist)."
 
         else:
             final_log_message = f"No new songs added (failed to extract chat content from '{target_drive_file['name'] if target_drive_file else 'unknown archive'}')."
 
-    # --- Final Run Summary Logging ---
+    # --- Final Summary (single log line) ---
     if SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN:
-        # There were new songs added — log everything
+        added_count = len(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)
+        
+        # Build issues suffix
+        issues_parts = []
+        if total_apple_issues > 0:
+            issues_parts.append(f"{total_apple_issues} Apple links failed")
+        if spotify_invalid_count > 0:
+            issues_parts.append(f"{spotify_invalid_count} invalid Spotify URLs")
+        
+        issues_str = f" | Issues: {', '.join(issues_parts)}" if issues_parts else ""
+        
+        # Get song names for log (max 5)
         if sp:
-            song_details_for_log = get_track_details_for_logging(
-                sp,
-                SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN,
-            )
-            # Cap at 20 tracks for readability
-            max_listed = 20
-            shown = song_details_for_log[:max_listed]
-            remaining = len(song_details_for_log) - len(shown)
-            suffix = f" (+{remaining} more)" if remaining > 0 else ""
-            songs_log_str = ", ".join(shown) + suffix
-            final_log_message = (
-                f"{len(song_details_for_log)} new songs added - {songs_log_str}"
-            )
+            song_details = get_track_details_for_logging(sp, SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN[:5])
+            songs_preview = ", ".join(song_details)
+            if added_count > 5:
+                songs_preview += f" (+{added_count - 5} more)"
+            final_log_message = f"{added_count} songs added: {songs_preview}{issues_str}"
         else:
-            final_log_message = (
-                f"{len(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)} new song URIs were added "
-                f"(Spotify client unavailable for lookup): "
-                f"{', '.join(SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN)}"
-            )
-
-        # Write to file AND print to console
+            final_log_message = f"{added_count} songs added{issues_str}"
+        
         log_message(final_log_message)
-
     else:
-        # No new songs — print to console only, don't write to file
-        print("No new songs added this run.", flush=True)
+        # Build "no songs added" message with context
+        issues_parts = []
+        try:
+            if total_apple_issues > 0:
+                issues_parts.append(f"{total_apple_issues} Apple links failed")
+        except NameError:
+            pass  # Variables not set if early exit
+        
+        issues_str = f" | {', '.join(issues_parts)}" if issues_parts else ""
+        
+        # Only log to file if there were issues worth noting
+        if issues_parts:
+            log_message(f"No new songs added{issues_str}")
+        # Otherwise silent (just console print for debugging)
 
 if __name__ == "__main__":
     load_dotenv()
