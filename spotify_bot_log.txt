@@ -54,3 +54,4 @@
 [2026-01-29 00:15:11 IST] Skipped 1 unsupported Apple Music links (playlists)
 [2026-01-29 00:15:11 IST] Failed to convert 4 Apple Music links
 [2026-01-31 14:16:24 IST] 13 songs added: I Destroyed Disco by The Dare, I Want You (She's So Heavy) - Remastered 2009 by The Beatles, Locket by Crumb, Passengers by Roderic, Jacqueline Jones, Oboe by Camel Power Club (+8 more) | Issues: 5 Apple links failed
+[2026-01-31 14:25:13 IST] 1 songs added: I Want You (She's So Heavy) - Remastered 2009 by The Beatles | Issues: 5 Apple links failed
