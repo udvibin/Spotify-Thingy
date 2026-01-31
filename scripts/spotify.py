@@ -869,11 +869,32 @@ def process_spotify_from_drive():
                             if ENABLE_DESTRUCTIVE_SYNC:
                                 sync_playlist_chronologically(sp, target_playlist_id, ordered_track_uris_from_chat)
                             else:
-                                existing = set(get_existing_playlist_track_uris_in_order(sp, target_playlist_id))
-                                to_add = [uri for uri in ordered_track_uris_from_chat if uri not in existing]
+                                # Get existing URIs
+                                existing_uris_list = get_existing_playlist_track_uris_in_order(sp, target_playlist_id)
+                                existing_uris_set = set(existing_uris_list)
+                                
+                                # Get existing track names to detect "same song, different version"
+                                # This prevents Apple Music links adding duplicates of existing songs
+                                existing_details = get_track_details_for_logging(sp, existing_uris_list)
+                                existing_names_lower = {detail.lower() for detail in existing_details if detail}
+                                
+                                # Get details for candidates to check against existing names
+                                candidate_details = get_track_details_for_logging(sp, ordered_track_uris_from_chat)
+                                
+                                to_add = []
+                                for uri, detail in zip(ordered_track_uris_from_chat, candidate_details):
+                                    # Skip if exact URI already exists
+                                    if uri in existing_uris_set:
+                                        continue
+                                        
+                                    # Skip if same name+artist already exists (Apple Music different version)
+                                    if detail and detail.lower() in existing_names_lower:
+                                        continue
+                                        
+                                    to_add.append(uri)
+                                
                                 if to_add:
                                     add_tracks_to_playlist(sp, target_playlist_id, to_add)
-                                # else: no new songs - final_log_message set below
                                 else:
                                     final_log_message = "No new songs added (all found songs already in playlist)."
 
