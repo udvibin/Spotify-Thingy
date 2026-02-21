@@ -2,7 +2,7 @@ name: Spotify Playlist Updater from Drive
 
 on:
   schedule:
-    # Runs every 3 days at 18:30 UTC (00:00 IST)
+    # Runs every 2 days at 18:30 UTC (00:00 IST)
     - cron: "0 18 */2 * *"
   workflow_dispatch:
 
