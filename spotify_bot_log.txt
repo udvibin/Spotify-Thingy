@@ -72,3 +72,10 @@
 [2026-03-04 00:24:57 IST] No new songs added | 7 Apple links failed
 [2026-03-06 00:48:54 IST] 5 songs added: Destinations by Gesaffelstein, Aashiqana by Chaar Diwaari, Indian Ocean, gini, This Dance by KYRIL, Soft Focus by Mindchatter, Leaders (feat. NAV) by Lil Uzi Vert, NAV | Issues: 7 Apple links failed
 [2026-03-08 00:07:31 IST] No new songs added | 7 Apple links failed
+[2026-03-10 00:26:31 IST] Error fetching playlist items: SpotifyException(403, -1, 'https://api.spotify.com/v1/playlists/5GQD4i09YLTxJb8hPpI1sE/items?limit=100&offset=0&fields=items%28track%28uri%29%29%2Cnext&additional_types=track:\n Active premium subscription required for the owner of the app.')
+[2026-03-10 00:26:31 IST] Error adding chunk to Spotify (chunk start 0): SpotifyException(403, -1, 'https://api.spotify.com/v1/playlists/5GQD4i09YLTxJb8hPpI1sE/items:\n Active premium subscription required for the owner of the app.')
+[2026-03-10 00:26:31 IST] Error adding chunk to Spotify (chunk start 100): SpotifyException(403, -1, 'https://api.spotify.com/v1/playlists/5GQD4i09YLTxJb8hPpI1sE/items:\n Active premium subscription required for the owner of the app.')
+[2026-03-10 00:26:31 IST] Error adding chunk to Spotify (chunk start 200): SpotifyException(403, -1, 'https://api.spotify.com/v1/playlists/5GQD4i09YLTxJb8hPpI1sE/items:\n Active premium subscription required for the owner of the app.')
+[2026-03-10 00:26:31 IST] Error adding chunk to Spotify (chunk start 300): SpotifyException(403, -1, 'https://api.spotify.com/v1/playlists/5GQD4i09YLTxJb8hPpI1sE/items:\n Active premium subscription required for the owner of the app.')
+[2026-03-10 00:26:31 IST] Error adding chunk to Spotify (chunk start 400): SpotifyException(403, -1, 'https://api.spotify.com/v1/playlists/5GQD4i09YLTxJb8hPpI1sE/items:\n Active premium subscription required for the owner of the app.')
+[2026-03-10 00:26:31 IST] No new songs added | 24 Apple links failed
