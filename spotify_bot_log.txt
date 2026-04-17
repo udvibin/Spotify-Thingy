@@ -206,3 +206,4 @@
 [2026-04-14 00:46:20 IST] Error adding chunk to Spotify (chunk start 400): SpotifyException(403, -1, 'https://api.spotify.com/v1/playlists/5GQD4i09YLTxJb8hPpI1sE/items:\n Active premium subscription required for the owner of the app. When the subscription status changes, it can take a few hours before requests are allowed again.')
 [2026-04-14 00:46:20 IST] No new songs added | 25 Apple links failed
 [2026-04-16 00:50:16 IST] Spotify authentication failure: SpotifyException(403, -1, 'https://api.spotify.com/v1/me/:\n Active premium subscription required for the owner of the app. When the subscription status changes, it can take a few hours before requests are allowed again.')
+[2026-04-18 00:33:32 IST] Spotify authentication failure: SpotifyException(403, -1, 'https://api.spotify.com/v1/me/:\n Active premium subscription required for the owner of the app. When the subscription status changes, it can take a few hours before requests are allowed again.')
