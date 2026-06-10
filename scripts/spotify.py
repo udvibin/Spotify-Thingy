@@ -528,6 +528,10 @@ def resolve_apple_music_metadata_via_html(url: str) -> dict:
     try:
         response = requests.get(url, headers=headers, timeout=APPLE_MUSIC_REQUEST_TIMEOUT)
         response.raise_for_status()
+        # Apple serves UTF-8 without a charset header; requests then falls
+        # back to latin-1, mangling accents and non-breaking spaces
+        # ("Mañana" -> "MaÃ±ana"), which poisons the Spotify search.
+        response.encoding = "utf-8"
         html_content = response.text
     except requests.RequestException as e:
         result["reason"] = f"failed to fetch page: {repr(e)}"
@@ -541,6 +545,11 @@ def resolve_apple_music_metadata_via_html(url: str) -> dict:
     og_title = soup.find("meta", property="og:title")
     if og_title and og_title.get("content"):
         title_content = str(og_title["content"]).strip()
+
+        # Apple appends "on Apple Music" to og:title (with a non-breaking
+        # space). Strip it, otherwise it ends up inside the artist name and
+        # poisons the Spotify search query.
+        title_content = re.sub(r"\s+on\s+Apple\s+Music\s*$", "", title_content, flags=re.IGNORECASE)
 
         # Parse "Track Name by Artist Name" format
         if " by " in title_content:

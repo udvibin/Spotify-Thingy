@@ -1,16 +1,4 @@
 {
-  "https://music.apple.com/in/album/led-zeppelin/1440825369?i=1440826322&ls": "no confident Spotify match for 'Led Zeppelin' by 'Tame Impala on AppleÂ Music'",
   "https://music.apple.com/in/song/winny/1840941762": "failed to fetch page: HTTPError('404 Client Error: Not Found for url: https://music.apple.com/in/song/winny/1840941762')",
-  "https://music.apple.com/in/album/stateside-with-zara-larsson/1843595790?i=1843595808&ls": "no confident Spotify match for 'Stateside (with Zara Larsson)' by 'PinkPantheress on AppleÂ Music'",
-  "https://music.apple.com/in/album/ma%C3%B1ana-tepotzlan/1645647430?i=1645647434&ls": "no confident Spotify match for 'MaÃ±ana Tepotzlan' by 'El BÃºho on AppleÂ Music'",
-  "https://music.apple.com/in/playlist/apple-music-live-fred-again/pl": "playlist links not supported (requires Apple Music API)",
-  "https://music.apple.com/in/album/stranger/1872513223?i=1872513224&ls": "no confident Spotify match for 'stranger' by 'WHIPPED CREAM on AppleÂ Music'",
-  "https://music.apple.com/in/album/controller/1566759110?i=1566759111&ls": "no confident Spotify match for 'Controller' by 'Channel Tres on AppleÂ Music'",
-  "https://music.apple.com/in/album/pick-up-the-phone/1813882823?i=1813882827&ls": "no confident Spotify match for 'Pick Up The Phone' by 'SOFI TUKKER & NonÃ´ on AppleÂ Music'",
-  "https://music.apple.com/in/album/i-cant-wait/1888707282?i=1888707298&ls": "no confident Spotify match for 'I CANâT WAIT' by 'Kanye West on AppleÂ Music'",
-  "https://music.apple.com/in/album/mignonne-mastered-by-bernie-grundman/1597423751?ls": "no confident Spotify match for 'Mignonne (Mastered by Bernie Grundman)' by 'Taeko Onuki on Apple Music'",
-  "https://music.apple.com/in/album/missing-u/1436857058?i=1436857301&l=en-US&ls": "no confident Spotify match for 'Missing U' by 'Robyn on AppleÂ Music'",
-  "https://music.apple.com/in/album/the-kill-2/1884749508?i=1884749509&ls": "no confident Spotify match for 'the kill 2' by 'Lex Amarni & 2muchmotion on AppleÂ Music'",
-  "https://music.apple.com/in/album/venus-as-a-boy/1726662710?i=1726662713&ls": "no confident Spotify match for 'Venus as a Boy' by 'BjÃ¶rk on AppleÂ Music'",
-  "https://music.apple.com/in/album/e-i-f/1458799129?i=1458799350&l=en-US&ls": "no confident Spotify match for 'E.I.F.' by 'Conway on AppleÂ Music'"
+  "https://music.apple.com/in/playlist/apple-music-live-fred-again/pl": "playlist links not supported (requires Apple Music API)"
 }
