@@ -46,7 +46,7 @@ jobs:
           ENABLE_DESTRUCTIVE_SYNC: "false"
         run: python scripts/spotify.py
 
-      - name: Commit and Push Log File
+      - name: Commit and Push Log Files
         if: always()
         run: |
           set -e
@@ -54,30 +54,30 @@ jobs:
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-          if [ -f spotify_bot_log.txt ] && [ -s spotify_bot_log.txt ]; then
-            git add spotify_bot_log.txt
-
-            if ! git diff --staged --quiet; then
-              git commit -m "Update Spotify bot log $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-
-              # Rebase onto latest main before pushing (avoids non-fast-forward rejects)
-              git pull --rebase origin main
-
-              # Retry push in case something else updated main between pull and push
-              for i in 1 2 3; do
-                if git push; then
-                  exit 0
-                fi
-                echo "Push failed, retrying in 5s ($i/3)..."
-                sleep 5
-                git pull --rebase origin main
-              done
-
-              echo "Failed to push after retries."
-              exit 1
-            else
-              echo "No changes to log file to commit."
+          for f in spotify_bot_log.txt apple_link_failures.json; do
+            if [ -f "$f" ] && [ -s "$f" ]; then
+              git add "$f"
             fi
+          done
+
+          if ! git diff --staged --quiet; then
+            git commit -m "Update Spotify bot log $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+            # Rebase onto latest main before pushing (avoids non-fast-forward rejects)
+            git pull --rebase origin main
+
+            # Retry push in case something else updated main between pull and push
+            for i in 1 2 3; do
+              if git push; then
+                exit 0
+              fi
+              echo "Push failed, retrying in 5s ($i/3)..."
+              sleep 5
+              git pull --rebase origin main
+            done
+
+            echo "Failed to push after retries."
+            exit 1
           else
-            echo "Log file not found or is empty."
+            echo "No log changes to commit."
           fi

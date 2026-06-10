@@ -47,6 +47,17 @@ CHAT_TXT_FILENAME_IN_ARCHIVE_PATTERN = r"WhatsApp Chat with Mandatory vibe compl
 # Name of the log file written after each run
 LOG_FILENAME = "spotify_bot_log.txt"
 
+# Rolling log window: entries older than this are pruned at the start of each run
+LOG_RETENTION_DAYS = 90
+
+# Warn in the log if the chat export in Drive is older than this many days
+STALE_EXPORT_WARNING_DAYS = 10
+
+# Cache of Apple Music links that permanently fail (404s, playlists, no Spotify
+# match). These are skipped on future runs instead of re-scraped every time.
+# Delete an entry from this file to make the script retry that link.
+APPLE_FAILURE_CACHE_FILENAME = "apple_link_failures.json"
+
 # Global list to track which song URIs were successfully added this run
 SUCCESSFULLY_ADDED_SONG_URIS_THIS_RUN = []
 
@@ -87,6 +98,46 @@ def log_message(message: str) -> None:
     # Append to log file
     with open(LOG_FILENAME, "a", encoding="utf-8") as f:
         f.write(full_message + "\n")
+
+
+def prune_old_log_entries() -> None:
+    """
+    Keeps the log file as a rolling window of the last LOG_RETENTION_DAYS days.
+
+    Each log line starts with "[YYYY-MM-DD ...]". Lines older than the cutoff
+    are dropped; lines without a parseable timestamp inherit the keep/drop
+    decision of the entry above them (continuation lines).
+    """
+    if not os.path.exists(LOG_FILENAME):
+        return
+
+    cutoff_date = (
+        datetime.datetime.now(datetime.timezone.utc)
+        - datetime.timedelta(days=LOG_RETENTION_DAYS)
+    ).date()
+
+    kept_lines: list[str] = []
+    dropped_any = False
+    keep_current_entry = True
+
+    with open(LOG_FILENAME, "r", encoding="utf-8") as f:
+        for line in f:
+            match = re.match(r"\[(\d{4})-(\d{2})-(\d{2})", line)
+            if match:
+                try:
+                    line_date = datetime.date(*map(int, match.groups()))
+                    keep_current_entry = line_date >= cutoff_date
+                except ValueError:
+                    keep_current_entry = True
+            if keep_current_entry:
+                kept_lines.append(line)
+            else:
+                dropped_any = True
+
+    if dropped_any:
+        with open(LOG_FILENAME, "w", encoding="utf-8") as f:
+            f.writelines(kept_lines)
+        print(f"Pruned log entries older than {LOG_RETENTION_DAYS} days.")
 
 
 # =============================================================================
@@ -170,7 +221,7 @@ def get_track_uri_from_url(spotify_url: str) -> str | None:
     return None
 
 
-def get_existing_playlist_track_uris_in_order(sp: spotipy.Spotify, playlist_id: str) -> list[str]:
+def get_existing_playlist_track_uris_in_order(sp: spotipy.Spotify, playlist_id: str) -> list[str] | None:
     """
     Fetches all track URIs currently in the playlist, preserving their order.
 
@@ -181,7 +232,9 @@ def get_existing_playlist_track_uris_in_order(sp: spotipy.Spotify, playlist_id: 
         playlist_id: Spotify playlist ID
 
     Returns:
-        List of track URIs in playlist order
+        List of track URIs in playlist order, or None if the fetch failed.
+        Callers MUST abort on None: treating a failed fetch as an empty
+        playlist would re-add the entire chat as duplicates.
     """
     existing_uris: list[str] = []
     offset = 0
@@ -198,7 +251,7 @@ def get_existing_playlist_track_uris_in_order(sp: spotipy.Spotify, playlist_id: 
             )
         except Exception as e:
             log_message(f"Error fetching playlist items: {repr(e)}")
-            return existing_uris
+            return None
 
         if not results or not results['items']:
             break
@@ -307,6 +360,9 @@ def sync_playlist_chronologically(
 
     # Fetch existing playlist tracks (preserving order)
     existing_uris = get_existing_playlist_track_uris_in_order(sp, playlist_id)
+    if existing_uris is None:
+        log_message("Aborting sync: could not fetch existing playlist items.")
+        return False
     print(f"Playlist has {len(existing_uris)} tracks. Chat file has {len(ordered_track_uris_from_chat)} tracks.")
 
     # Find the first position where playlist and chat diverge
@@ -358,7 +414,9 @@ def get_track_details_for_logging(sp: spotipy.Spotify, track_uris: list[str]) ->
         track_uris: List of track URIs
 
     Returns:
-        List of formatted strings: "Song Name by Artist1, Artist2"
+        List of formatted strings: "Song Name by Artist1, Artist2".
+        Always exactly one entry per input URI, in the same order: callers
+        zip() this against the input list, so alignment must never drift.
     """
     if not track_uris:
         return []
@@ -370,24 +428,23 @@ def get_track_details_for_logging(sp: spotipy.Spotify, track_uris: list[str]) ->
         chunk_uris = track_uris[i:i + 50]
         try:
             tracks_info = sp.tracks(tracks=chunk_uris)
-            if tracks_info and 'tracks' in tracks_info:
-                for track_data in tracks_info['tracks']:
-                    if track_data:
-                        name = track_data['name']
-                        artists = ", ".join([artist['name'] for artist in track_data['artists']])
-                        track_details_list.append(f"{name} by {artists}")
-                    else:
-                        # Handle case where API returns null for a track ID
-                        failed_uri_index = -1
-                        try:
-                            if tracks_info and 'tracks' in tracks_info:
-                                failed_uri_index = tracks_info['tracks'].index(track_data)
-                        except ValueError:
-                            pass
-                        failed_uri = chunk_uris[failed_uri_index] if 0 <= failed_uri_index < len(chunk_uris) else "UnknownURI"
-                        track_details_list.append(f"Unknown Track (URI: {failed_uri})")
-        except Exception as e:
+            tracks_list = tracks_info.get('tracks') if tracks_info else None
+        except Exception:
+            tracks_list = None
+
+        if not tracks_list:
             track_details_list.extend([f"ErrorFetchingTrackDetailsForURI({uri})" for uri in chunk_uris])
+            continue
+
+        for idx, uri in enumerate(chunk_uris):
+            track_data = tracks_list[idx] if idx < len(tracks_list) else None
+            if track_data:
+                name = track_data['name']
+                artists = ", ".join([artist['name'] for artist in track_data['artists']])
+                track_details_list.append(f"{name} by {artists}")
+            else:
+                # API returned null for this track ID
+                track_details_list.append(f"Unknown Track (URI: {uri})")
 
     return track_details_list
 
@@ -405,6 +462,24 @@ APPLE_MUSIC_URL_PATTERN = r"https?:\/\/music\.apple\.com\/[a-z]{2}\/(?:album|son
 
 # Spotify track URL pattern
 SPOTIFY_URL_PATTERN = r"(https?:\/\/open\.spotify\.com\/track\/[a-zA-Z0-9]+)"
+
+
+def load_apple_failure_cache() -> dict[str, str]:
+    """
+    Loads the cache of Apple Music URLs known to permanently fail.
+    Maps URL -> failure reason. Missing/corrupt file returns an empty cache.
+    """
+    try:
+        with open(APPLE_FAILURE_CACHE_FILENAME, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+            return cache if isinstance(cache, dict) else {}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_apple_failure_cache(cache: dict[str, str]) -> None:
+    with open(APPLE_FAILURE_CACHE_FILENAME, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2, ensure_ascii=False)
 
 
 def resolve_apple_music_metadata_via_html(url: str) -> dict:
@@ -796,6 +871,22 @@ def process_spotify_from_drive():
         file_id = target_drive_file['id']
         file_name = target_drive_file['name']
 
+        # Warn if the chat export hasn't been re-uploaded in a while: a stale
+        # export means recently shared songs can't be synced at all.
+        modified_time_str = target_drive_file.get('modifiedTime')
+        if modified_time_str:
+            try:
+                modified_dt = datetime.datetime.fromisoformat(modified_time_str.replace("Z", "+00:00"))
+                export_age_days = (datetime.datetime.now(datetime.timezone.utc) - modified_dt).days
+                print(f"Chat export '{file_name}' was last modified {export_age_days} days ago.")
+                if export_age_days > STALE_EXPORT_WARNING_DAYS:
+                    log_message(
+                        f"Warning: chat export in Drive is {export_age_days} days old - "
+                        "re-export the WhatsApp chat to sync newer songs."
+                    )
+            except ValueError:
+                pass
+
         # Step 3: Download and extract chat text
         chat_text_content = download_and_extract_chat_from_archive(drive_service, file_id, file_name)
 
@@ -818,7 +909,11 @@ def process_spotify_from_drive():
                         # --- STEP 6: Convert each link to Spotify URI ---
                         apple_music_failed_count = 0
                         apple_music_playlist_count = 0
+                        apple_known_bad_count = 0
                         spotify_invalid_count = 0
+
+                        apple_failure_cache = load_apple_failure_cache()
+                        apple_cache_dirty = False
 
                         for link in all_links:
                             if link["type"] == "spotify":
@@ -829,13 +924,28 @@ def process_spotify_from_drive():
                                     spotify_invalid_count += 1
 
                             elif link["type"] == "apple":
+                                # Skip links that permanently failed on a previous run
+                                if link["url"] in apple_failure_cache:
+                                    apple_known_bad_count += 1
+                                    continue
+
                                 metadata = resolve_apple_music_metadata_via_html(link["url"])
 
                                 if not metadata["is_valid"]:
-                                    if "playlist" in metadata["reason"]:
+                                    reason = metadata["reason"]
+                                    if "playlist" in reason:
                                         apple_music_playlist_count += 1
                                     else:
                                         apple_music_failed_count += 1
+                                    # Cache failures that won't fix themselves; transient
+                                    # fetch errors (timeouts, rate limits) are retried.
+                                    if (
+                                        "playlist" in reason
+                                        or "404" in reason
+                                        or reason == "could not extract track name from page"
+                                    ):
+                                        apple_failure_cache[link["url"]] = reason
+                                        apple_cache_dirty = True
                                     continue
 
                                 spotify_uri = search_spotify_for_apple_music_track(
@@ -849,6 +959,19 @@ def process_spotify_from_drive():
                                     ordered_track_uris_from_chat.append(spotify_uri)
                                 else:
                                     apple_music_failed_count += 1
+                                    apple_failure_cache[link["url"]] = (
+                                        f"no confident Spotify match for "
+                                        f"'{metadata.get('track_name')}' by '{metadata.get('artist_name')}'"
+                                    )
+                                    apple_cache_dirty = True
+
+                        if apple_cache_dirty:
+                            save_apple_failure_cache(apple_failure_cache)
+                        if apple_known_bad_count:
+                            print(
+                                f"Skipped {apple_known_bad_count} known-bad Apple links "
+                                f"(cached in {APPLE_FAILURE_CACHE_FILENAME})."
+                            )
 
                         # --- Deduplicate URIs while preserving order ---
                         seen_uris: set[str] = set()
@@ -867,36 +990,49 @@ def process_spotify_from_drive():
                         else:
                             # --- STEP 7: Sync or Append ---
                             if ENABLE_DESTRUCTIVE_SYNC:
-                                sync_playlist_chronologically(sp, target_playlist_id, ordered_track_uris_from_chat)
-                            else:
-                                # Get existing URIs
-                                existing_uris_list = get_existing_playlist_track_uris_in_order(sp, target_playlist_id)
-                                existing_uris_set = set(existing_uris_list)
-                                
-                                # Get existing track names to detect "same song, different version"
-                                # This prevents Apple Music links adding duplicates of existing songs
-                                existing_details = get_track_details_for_logging(sp, existing_uris_list)
-                                existing_names_lower = {detail.lower() for detail in existing_details if detail}
-                                
-                                # Get details for candidates to check against existing names
-                                candidate_details = get_track_details_for_logging(sp, ordered_track_uris_from_chat)
-                                
-                                to_add = []
-                                for uri, detail in zip(ordered_track_uris_from_chat, candidate_details):
-                                    # Skip if exact URI already exists
-                                    if uri in existing_uris_set:
-                                        continue
-                                        
-                                    # Skip if same name+artist already exists (Apple Music different version)
-                                    if detail and detail.lower() in existing_names_lower:
-                                        continue
-                                        
-                                    to_add.append(uri)
-                                
-                                if to_add:
-                                    add_tracks_to_playlist(sp, target_playlist_id, to_add)
+                                if sync_playlist_chronologically(sp, target_playlist_id, ordered_track_uris_from_chat):
+                                    final_log_message = "No new songs added (playlist already in sync)."
                                 else:
-                                    final_log_message = "No new songs added (all found songs already in playlist)."
+                                    final_log_message = "No new songs added (sync failed; see errors above)."
+                            else:
+                                # Get existing URIs; abort if the fetch failed, otherwise
+                                # everything would look "new" and get re-added as duplicates
+                                existing_uris_list = get_existing_playlist_track_uris_in_order(sp, target_playlist_id)
+                                if existing_uris_list is None:
+                                    final_log_message = "No new songs added (could not fetch existing playlist items; aborted to avoid duplicate adds)."
+                                else:
+                                    existing_uris_set = set(existing_uris_list)
+
+                                    # Get existing track names to detect "same song, different version"
+                                    # This prevents Apple Music links adding duplicates of existing songs
+                                    existing_details = get_track_details_for_logging(sp, existing_uris_list)
+                                    existing_names_lower = {detail.lower() for detail in existing_details if detail}
+
+                                    # Get details for candidates to check against existing names
+                                    candidate_details = get_track_details_for_logging(sp, ordered_track_uris_from_chat)
+
+                                    to_add = []
+                                    for uri, detail in zip(ordered_track_uris_from_chat, candidate_details):
+                                        # Skip if exact URI already exists
+                                        if uri in existing_uris_set:
+                                            continue
+
+                                        # Skip if same name+artist already exists (Apple Music different version)
+                                        if detail and detail.lower() in existing_names_lower:
+                                            continue
+
+                                        to_add.append(uri)
+                                        # Track the accepted name so the same song shared again
+                                        # in this batch (e.g. from a different album) is skipped
+                                        if detail:
+                                            existing_names_lower.add(detail.lower())
+
+                                    if to_add:
+                                        # Overridden by the success summary below if any adds went through
+                                        final_log_message = "No new songs added (track add calls failed; see errors above)."
+                                        add_tracks_to_playlist(sp, target_playlist_id, to_add)
+                                    else:
+                                        final_log_message = "No new songs added (all found songs already in playlist)."
 
         else:
             final_log_message = f"No new songs added (failed to extract chat content from '{target_drive_file['name'] if target_drive_file else 'unknown archive'}')."
@@ -928,19 +1064,19 @@ def process_spotify_from_drive():
     else:
         # Build "no songs added" message with context
         issues_parts = []
-        try:
-            if total_apple_issues > 0:
-                issues_parts.append(f"{total_apple_issues} Apple links failed")
-        except NameError:
-            pass  # Variables not set if early exit
-        
+        if total_apple_issues > 0:
+            issues_parts.append(f"{total_apple_issues} Apple links failed")
+        if spotify_invalid_count > 0:
+            issues_parts.append(f"{spotify_invalid_count} invalid Spotify URLs")
+
         issues_str = f" | {', '.join(issues_parts)}" if issues_parts else ""
-        
-        # Only log to file if there were issues worth noting
-        if issues_parts:
-            log_message(f"No new songs added{issues_str}")
-        # Otherwise silent (just console print for debugging)
+
+        # Always log one line per run, even when there is nothing to do:
+        # makes the log a heartbeat and ensures the workflow commits something,
+        # which keeps GitHub from auto-disabling the schedule after 60 idle days.
+        log_message(f"{final_log_message}{issues_str}")
 
 if __name__ == "__main__":
     load_dotenv()
+    prune_old_log_entries()
     process_spotify_from_drive()
