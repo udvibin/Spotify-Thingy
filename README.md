@@ -35,9 +35,12 @@ A GitHub Actions workflow that automatically syncs a Spotify playlist with music
 ## Features
 
 - **Chronological Order**: Preserves the order songs were shared in chat
-- **Duplicate Prevention**: Each track appears only once (even if shared as both Spotify and Apple Music links)
+- **Duplicate Prevention**: Each track appears only once (even if shared as both Spotify and Apple Music links, or as different versions of the same song)
 - **Confidence Matching**: Apple Music → Spotify conversion validates track/artist match to avoid wrong songs
-- **Clean Logging**: Single-line log entries with song count and issue summary
+- **Apple Failure Cache**: Permanently dead Apple links (404s, playlists, confirmed no Spotify match) are cached in `apple_link_failures.json` and skipped on future runs — delete an entry to retry it
+- **Rolling Log**: One summary line per run; entries older than 90 days are pruned automatically
+- **Stale Export Warning**: Logs a warning when the chat export in Drive is older than 10 days
+- **Safe Aborts**: If the existing playlist can't be fetched, the run aborts instead of re-adding everything as duplicates
 - **GitHub Actions Ready**: Runs on schedule or manually
 
 ## Setup
@@ -89,13 +92,13 @@ After browser auth, copy `.spotifycache` contents to `SPOTIPY_CACHE_CONTENT` sec
 
 ## Log Format
 
-[2026-01-31 13:00:00 IST] 5 songs added: Song1 by Artist1, Song2 by Artist2 (+3 more) | Issues: 4 Apple links failed
+Every run writes exactly one summary line (the log doubles as a heartbeat, and the resulting commit keeps GitHub from auto-disabling the schedule):
 
-When no new songs but issues exist:
+[2026-06-10 13:00:00 IST] 5 songs added: Song1 by Artist1, Song2 by Artist2 (+3 more) | Issues: 4 Apple links failed
 
-[2026-01-31 13:00:00 IST] No new songs added | 4 Apple links failed
+[2026-06-10 13:00:00 IST] No new songs added (all found songs already in playlist).
 
-Silent (no log entry) when nothing to add and no issues.
+Cached Apple failures are skipped silently and do not count toward "Issues". Entries older than 90 days are pruned at the start of each run.
 
 ## Directory Structure
 
@@ -113,7 +116,9 @@ Silent (no log entry) when nothing to add and no issues.
 
 ├── .spotifycache                 # Generated locally (gitignored)
 
-├── spotify_bot_log.txt           # Run history log
+├── spotify_bot_log.txt           # Run history log (rolling 90 days)
+
+├── apple_link_failures.json      # Cache of permanently failed Apple links
 
 └── README.md
 
@@ -124,8 +129,11 @@ Silent (no log entry) when nothing to add and no issues.
 |-------|----------|
 | Google Drive authentication failure | Check `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` is valid JSON |
 | Spotify authentication failure | Verify credentials; regenerate `.spotifycache` if expired |
+| `403: Active premium subscription required` | The Spotify app owner's Premium lapsed; the API blocks the app until it's renewed. Runs resume automatically after renewal |
 | Target chat archive not found | Check folder ID and filename match |
 | Apple Music links failing | Normal for removed songs, playlists, or region-locked content |
+| Apple link wrongly cached as failed | Delete its entry from `apple_link_failures.json` to retry it next run |
+| Chat export is N days old warning | Re-export the WhatsApp chat and upload the ZIP to Drive — songs shared after the last export can't be synced |
 
 ## License
 
