@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a161d">
+<title>Mandatory Vibe Compliance — Wrapped, forever</title>
+<meta name="description" content="Four years of the bois sharing certified bangers. Every number, every cover, every vibe.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
+    "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/+esm",
+    "gsap/ScrollTrigger": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/ScrollTrigger/+esm",
+    "chart.js/auto": "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/auto/+esm"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="loader" role="status" aria-label="loading">
+  <div class="loader-vinyl"><i></i></div>
+  <p id="loader-msg">spinning up the archive…</p>
+</div>
+
+<div id="bg-fallback" aria-hidden="true"></div>
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div id="bg-dim" aria-hidden="true"></div>
+
+<main id="main">
+
+  <!-- 1 · hero -->
+  <header class="sec hero" id="hero">
+    <p class="overline" id="hero-overline">MANDATORY VIBE COMPLIANCE · EST. AUG 2021</p>
+    <h1 class="hero-line" id="hero-line">A few years. A lot of songs.</h1>
+    <div class="viz vinyl-stage" id="vinyl-stage">
+      <div class="fallback vinyl-disc" aria-hidden="true"><span class="vinyl-label"><b>MVC</b><small>est. 2021</small></span></div>
+    </div>
+  </header>
+
+  <!-- 2 · the numbers -->
+  <section class="sec" id="numbers">
+    <p class="kicker" data-reveal><span class="knum">01</span>The numbers</p>
+    <h2 class="sec-title" data-reveal>Compliance, <em class="grad">quantified.</em></h2>
+    <p class="sub" data-reveal>vibes have been thoroughly enforced.</p>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <!-- 3 · galaxy -->
+  <section class="sec full" id="galaxy">
+    <div class="viz galaxy-stage" id="galaxy-stage">
+      <div class="fallback art-grid" id="galaxy-fallback"></div>
+    </div>
+    <div class="stage-overlay top">
+      <p class="kicker" data-reveal><span class="knum">02</span>The archive</p>
+      <h2 class="sec-title sm" data-reveal>Every cover, <em class="grad">ever.</em></h2>
+    </div>
+    <div class="stage-overlay bottom">
+      <div class="chips" id="galaxy-chips" role="group" aria-label="filter by person"></div>
+    </div>
+  </section>
+
+  <!-- 4 · leaderboard -->
+  <section class="sec" id="leaderboard">
+    <p class="kicker" data-reveal><span class="knum">03</span>The leaderboard</p>
+    <h2 class="sec-title" data-reveal>Who <em class="grad">carried?</em></h2>
+    <p class="sub" data-reveal>shares per boi. no participation trophies. hover a row for the year-by-year.</p>
+    <div class="chips pills" id="year-pills" role="group" aria-label="filter by year"></div>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <!-- 5 · the bois -->
+  <section class="sec wide" id="bois">
+    <p class="kicker" data-reveal><span class="knum">04</span>The cast</p>
+    <h2 class="sec-title" data-reveal>The <em class="grad">bois.</em></h2>
+    <p class="sub" data-reveal>thirteen certified taste profiles. swipe →</p>
+    <div class="carousel" id="cards"></div>
+  </section>
+
+  <!-- 6 · certified group bangers -->
+  <section class="sec" id="bangers">
+    <p class="kicker" data-reveal><span class="knum">05</span>Group consensus</p>
+    <h2 class="sec-title" data-reveal>Certified <em class="grad">bangers.</em></h2>
+    <p class="sub" data-reveal>crossovers — songs more than one of the bois had to share. tap a cover to play it.</p>
+    <div class="track-grid" id="crossovers"></div>
+    <div id="reshared-block">
+      <h3 class="mini-title" data-reveal>most re-shared</h3>
+      <div class="track-grid slim" id="reshared"></div>
+    </div>
+  </section>
+
+  <!-- 7 · constellation -->
+  <section class="sec full" id="constellation">
+    <div class="viz constellation-stage" id="constellation-stage">
+      <div class="fallback pairs" id="pairs"></div>
+    </div>
+    <div class="stage-overlay top">
+      <p class="kicker" data-reveal><span class="knum">06</span>Group dynamics</p>
+      <h2 class="sec-title sm" data-reveal>The taste <em class="grad">constellation.</em></h2>
+      <p class="sub" data-reveal>closer &amp; brighter = more shared artists.</p>
+    </div>
+  </section>
+
+  <!-- 8 · timeline -->
+  <section class="sec" id="timeline">
+    <p class="kicker" data-reveal><span class="knum">07</span>The pulse</p>
+    <h2 class="sec-title" data-reveal>The <em class="grad">heartbeat.</em></h2>
+    <p class="sub" data-reveal>songs per month, since day one.</p>
+    <div class="chart-wrap" data-reveal>
+      <canvas id="timeline-chart"></canvas>
+      <div class="fallback month-bars" id="timeline-fallback"></div>
+    </div>
+  </section>
+
+  <!-- 9 · trendsetters -->
+  <section class="sec" id="trendsetters">
+    <p class="kicker" data-reveal><span class="knum">08</span>Patient zero</p>
+    <h2 class="sec-title" data-reveal>Who put <em class="grad">you on?</em></h2>
+    <p class="sub" data-reveal>first to share an artist the group later adopted.</p>
+    <div class="trend-rows" id="trend-rows"></div>
+  </section>
+
+  <!-- 10 · outro -->
+  <section class="sec" id="outro">
+    <p class="kicker" data-reveal><span class="knum">09</span>For the record</p>
+    <h2 class="sec-title" data-reveal>The <em class="grad">receipts.</em></h2>
+    <div class="facts" id="facts"></div>
+    <p class="closing" data-reveal>As long as the group lives on, this page keeps counting.</p>
+    <p class="sync" data-reveal>Last sync <span id="sync-date">—</span> · <a class="tlink" href="./dashboard.html">nerd view →</a></p>
+  </section>
+
+</main>
+
+<footer>built with the bot · data from the chat itself</footer>
+
+<noscript><style>#loader{display:none}[data-reveal]{opacity:1!important;transform:none!important}</style>
+<p style="text-align:center;padding:2rem">This page needs JavaScript to count the bangers.</p></noscript>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

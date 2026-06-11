@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a161d">
+<title>Mandatory Vibe Compliance — the nerd view</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  /* Currents editorial system — same tokens as the story page */
+  :root {
+    --bg-0:#0a161d; --bg-1:#102530;
+    --ink:#eee9dd; --ink-dim:#9db4bd;
+    --teal:#3e8fae; --cyan:#7cc4dc; --coral:#e4593b; --pink:#ef8d9c;
+    --line:rgba(157,180,189,.16); --hairline:rgba(157,180,189,.28);
+    --panel:rgba(16,37,48,.72);
+    --display:"Fraunces","Georgia",serif;
+    --body:"Space Grotesk",system-ui,sans-serif;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { overflow-x:clip; }
+  body {
+    background:var(--bg-0); color:var(--ink); font-family:var(--body);
+    padding:clamp(16px,3vw,32px); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection { background:var(--coral); color:var(--bg-0); }
+  a { color:inherit; text-decoration:none; }
+  a:hover { color:var(--coral); }
+  a .out { font-size:.72em; color:var(--coral); opacity:.65; margin-left:.25em; font-weight:500; }
+  a:hover .out { opacity:1; }
+
+  /* fixed Currents background (animated module behind, CSS gradient as base) */
+  #bg-canvas { position:fixed; inset:0; z-index:-1; width:100%; height:100%; }
+  #bg-fallback {
+    position:fixed; inset:0; z-index:-2;
+    background:
+      radial-gradient(130% 80% at 20% 0%, rgba(62,143,174,.22), transparent 55%),
+      radial-gradient(100% 70% at 85% 30%, rgba(124,196,220,.10), transparent 55%),
+      radial-gradient(150% 40% at 50% 78%, rgba(228,89,59,.13), transparent 60%),
+      radial-gradient(120% 90% at 50% 110%, rgba(239,141,156,.10), transparent 55%),
+      var(--bg-0);
+    background-size:170% 170%;
+    animation:bg-drift 30s ease-in-out infinite alternate;
+  }
+  body.bg-live #bg-fallback { animation:none; }
+  @keyframes bg-drift { from{background-position:0% 0%} to{background-position:100% 100%} }
+
+  .masthead { max-width:1280px; margin:0 auto 26px; }
+  .overline {
+    color:var(--ink-dim); font-size:.68rem; letter-spacing:.3em; text-transform:uppercase;
+    display:flex; align-items:center; gap:.9rem; margin-bottom:.7rem;
+  }
+  .overline::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--hairline),transparent); }
+  h1 {
+    font-family:var(--display); font-weight:550; font-optical-sizing:auto;
+    font-size:clamp(1.9em,5vw,3.2em); line-height:1.05; letter-spacing:-.015em;
+  }
+  h1 em { font-style:italic; font-weight:480; color:var(--coral); }
+  .sub { color:var(--ink-dim); margin:8px 0 0; font-size:.9em; font-variant-numeric:tabular-nums; }
+  .sub a { border-bottom:1px solid color-mix(in srgb,var(--coral) 55%,transparent); }
+
+  .wrap { max-width:1280px; margin:0 auto; }
+
+  .totals { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:22px; }
+  .totals div {
+    background:var(--panel); border:1px solid var(--line); border-top:1px solid var(--hairline);
+    border-radius:4px; padding:14px 22px; min-width:128px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  }
+  .totals b {
+    font-family:var(--display); font-weight:560; font-size:1.9em; line-height:1.1;
+    display:block; font-variant-numeric:lining-nums;
+  }
+  .totals span { color:var(--ink-dim); font-size:.7em; letter-spacing:.18em; text-transform:uppercase; }
+
+  .facts { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:22px; }
+  .facts div {
+    background:var(--panel); border:1px solid var(--line); border-left:2px solid var(--coral);
+    border-radius:4px; padding:13px 17px; max-width:340px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    font-family:var(--display); font-weight:450; font-size:.95em;
+  }
+  .facts b {
+    display:block; margin-bottom:5px; font-family:var(--body); font-weight:500;
+    color:var(--ink-dim); font-size:.66rem; letter-spacing:.22em; text-transform:uppercase;
+  }
+
+  .yearbar { margin-bottom:18px; display:flex; flex-wrap:wrap; gap:6px; }
+  .yearbar button {
+    background:rgba(10,22,29,.6); color:var(--ink); border:1px solid var(--line); border-radius:18px;
+    padding:7px 16px; cursor:pointer; font-size:.9em; font-family:var(--body);
+    transition:border-color .2s, background .2s;
+  }
+  .yearbar button:hover { border-color:var(--coral); }
+  .yearbar button.active { background:var(--coral); border-color:var(--coral); color:var(--bg-0); font-weight:700; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:22px; }
+  .card {
+    background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:18px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  }
+  .card h2, .secthead {
+    font-size:.72em; margin-bottom:14px; color:var(--ink-dim); text-transform:uppercase;
+    letter-spacing:.24em; font-weight:500; display:flex; align-items:center; gap:.9rem;
+  }
+  .card h2::after, .secthead::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--hairline),transparent); }
+  .secthead { font-size:.78em; margin:6px 0 12px; }
+
+  .people { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; margin-bottom:22px; }
+  .person {
+    background:var(--panel); border:1px solid var(--line); border-top:2px solid var(--pc,var(--teal));
+    border-radius:4px; padding:16px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  }
+  .person h3 {
+    font-family:var(--display); font-style:italic; font-weight:520; font-size:1.45em;
+    color:var(--pc,var(--cyan)); margin-bottom:8px;
+  }
+  .person .stat { display:flex; justify-content:space-between; padding:2.5px 0; font-size:.88em; gap:10px; }
+  .person .stat span:first-child { color:var(--ink-dim); }
+  .person .stat b { font-variant-numeric:tabular-nums; font-weight:600; text-align:right; }
+  .person .toplist { margin-top:9px; font-size:.84em; color:var(--ink-dim); line-height:1.55; }
+  .person .toplist b { color:var(--ink); font-weight:500; letter-spacing:.06em; }
+
+  table { width:100%; border-collapse:collapse; font-size:.88em; }
+  td, th { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); }
+  th { color:var(--ink-dim); text-transform:uppercase; font-size:.74em; letter-spacing:.18em; font-weight:500; }
+  td { font-variant-numeric:tabular-nums; }
+  tr:hover td { background:rgba(124,196,220,.05); }
+  .pill {
+    background:rgba(10,22,29,.6); border:1px solid var(--line); border-radius:10px;
+    padding:1px 8px; margin:1px; display:inline-block; font-size:.84em; color:var(--ink-dim);
+  }
+  .simwrap { overflow-x:auto; }
+  .sim td { text-align:center; min-width:46px; border:1px solid rgba(10,22,29,.7); }
+  .sim .rowname { text-align:right; color:var(--ink-dim); }
+
+  footer {
+    text-align:center; color:var(--ink-dim); font-size:.68rem; letter-spacing:.24em;
+    text-transform:uppercase; padding:2.2rem 1rem 1.2rem;
+  }
+  @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div id="bg-fallback" aria-hidden="true"></div>
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+<header class="masthead">
+  <p class="overline">The nerd view · every number we have</p>
+  <h1>Mandatory <em>Vibe</em> Compliance</h1>
+  <div class="sub" id="subtitle">loading data.json…</div>
+  <div class="sub"><a href="./index.html">← back to the story</a></div>
+</header>
+
+<div class="wrap">
+<div class="totals" id="totals"></div>
+<div class="facts" id="facts"></div>
+<div class="yearbar" id="yearbar"></div>
+
+<div class="grid">
+  <div class="card"><h2>Songs Contributed</h2><canvas id="leaderboard"></canvas></div>
+  <div class="card"><h2>Top Artists</h2><canvas id="topArtists"></canvas></div>
+</div>
+
+<div class="card" style="margin-bottom:22px;"><h2>Shares Over Time</h2><canvas id="timeline" height="70"></canvas></div>
+
+<h2 class="secthead">The Bois</h2>
+<div class="people" id="people"></div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Crossover Bangers (independently shared by 2+ people)</h2>
+    <table id="crossover"><tr><th>Track</th><th>Artist</th><th>Shared by</th></tr></table>
+  </div>
+  <div class="card">
+    <h2>Most Re-Shared</h2>
+    <table id="reshared"><tr><th>Track</th><th>Artist</th><th>×</th></tr></table>
+    <h2 style="margin-top:20px;">Trendsetters (brought the artist first)</h2>
+    <table id="trend"><tr><th>Artist</th><th>First by</th><th>When</th><th>Adopters</th><th>Shares</th></tr></table>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:22px;">
+  <h2>Taste Similarity</h2>
+  <div class="simwrap" id="sim"></div>
+</div>
+</div>
+
+<footer>built with the bot · data from the chat itself</footer>
+
+<!-- Currents flow-field background — same module the story page uses.
+     Wrapped in try/catch: if it fails, the CSS gradient fallback stays. -->
+<script type="module">
+(async () => {
+  try {
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const mobile = matchMedia("(max-width: 820px)").matches || matchMedia("(pointer: coarse)").matches;
+    const mod = await import("./js/visuals/fractal-bg.js");
+    const canvas = document.getElementById("bg-canvas");
+    const h = await mod.initFractalBg(canvas, { mobile, dprCap: mobile ? 1.5 : 2, reducedMotion: reduced });
+    if (!h) throw new Error("no handle");
+    document.body.classList.add("bg-live");
+    h.start?.();
+    let queued = false;
+    addEventListener("scroll", () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        const max = document.documentElement.scrollHeight - innerHeight;
+        try { h.setScroll?.(max > 0 ? scrollY / max : 0); } catch {}
+      });
+    }, { passive: true });
+    addEventListener("resize", () => { try { h.resize(); } catch {} });
+  } catch (err) {
+    console.warn("[viz fallback] fractal background:", err);
+  }
+})();
+</script>
+
+<script>
+fetch('data.json').then(r => r.json()).then(init);
+
+const INK = '#eee9dd', DIM = '#9db4bd';
+const TEAL = '#3e8fae', CYAN = '#7cc4dc', CORAL = '#e4593b', PINK = '#ef8d9c';
+/* same person palette as the story page (js/data.js) */
+const PERSON_COLORS = {
+  Uday:'#e4593b', Shridhar:'#7cc4dc', Pratyush:'#ef8d9c', Ammar:'#e8b15a',
+  Dhawal:'#3e8fae', Sameer:'#a8c46f', Dhruvajit:'#d98c66', Kunal:'#6f8fd6',
+  Tushar:'#f2d06b', Praneet:'#c4536e', Karan:'#6fc4a8', Shaury:'#a98ad6',
+  Ankit:'#9db4bd',
+};
+const colorOf = n => PERSON_COLORS[n] || DIM;
+const trackUrl = uri => 'https://open.spotify.com/track/' + uri.split(':').pop();
+const searchUrl = name => 'https://open.spotify.com/search/' + encodeURIComponent(name);
+const shorten = (s, n = 28) => s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+const tlink = (uri, name) =>
+  `<a href="${trackUrl(uri)}" target="_blank" rel="noopener" title="${name.replace(/"/g, '&quot;')}">${shorten(name)}<span class="out">↗</span></a>`;
+const alink = name =>
+  `<a href="${searchUrl(name)}" target="_blank" rel="noopener">${name}<span class="out">↗</span></a>`;
+
+Chart.defaults.color = DIM;
+Chart.defaults.borderColor = 'rgba(157,180,189,.12)';
+Chart.defaults.font.family = "'Space Grotesk', system-ui, sans-serif";
+/* instant data on hover everywhere: no need to hit the exact pixel, no tooltip lag */
+const HOVER = { interaction: { mode: 'index', intersect: false } };
+const TIP = { tooltip: { animation: { duration: 0 }, displayColors: false,
+  backgroundColor: 'rgba(10,22,29,.94)', borderColor: 'rgba(157,180,189,.16)', borderWidth: 1,
+  titleColor: INK, bodyColor: DIM } };
+
+function init(D) {
+  const disp = n => D.people[n] ? D.people[n].display : n;
+
+  document.getElementById('subtitle').textContent =
+    `${D.meta.range[0]} → ${D.meta.range[1]} · generated ${D.meta.generated.slice(0,10)}`;
+
+  const totals = document.getElementById('totals');
+  [['Shares', D.meta.totals.shares], ['Unique tracks', D.meta.totals.unique_tracks],
+   ['Messages', D.meta.totals.messages], ['Artists', D.meta.totals.artists],
+   ['Contributors', D.meta.totals.people]].forEach(([l, v]) => {
+    const d = document.createElement('div');
+    d.innerHTML = `<b>${v.toLocaleString()}</b><span>${l}</span>`;
+    totals.appendChild(d);
+  });
+
+  const facts = document.getElementById('facts');
+  D.facts.forEach(f => {
+    const d = document.createElement('div');
+    d.innerHTML = `<b>${f.title}</b>${f.text}`;
+    facts.appendChild(d);
+  });
+
+  // all-time artist counts (exact, from tracks)
+  const allArtists = {};
+  Object.values(D.tracks).forEach(t => {
+    const n = Object.values(t.shared_by).reduce((a, b) => a + b, 0);
+    t.artists.forEach(a => allArtists[a] = (allArtists[a] || 0) + n);
+  });
+
+  // year filter
+  let year = 'all';
+  const years = Object.keys(D.years);
+  const bar = document.getElementById('yearbar');
+  ['all', ...years].forEach(y => {
+    const b = document.createElement('button');
+    b.textContent = y === 'all' ? 'All time' : y;
+    if (y === 'all') b.classList.add('active');
+    b.onclick = () => { year = y;
+      bar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+      charts(); };
+    bar.appendChild(b);
+  });
+
+  let lb, ta, tl;
+  function charts() {
+    let counts;
+    if (year === 'all') counts = Object.entries(D.people).map(([n, p]) => [disp(n), p.totals.shares]);
+    else counts = Object.entries(D.people)
+      .map(([n, p]) => [disp(n), p.per_year[year] || 0]).filter(c => c[1] > 0);
+    counts.sort((a, b) => b[1] - a[1]);
+    if (lb) lb.destroy();
+    lb = new Chart(leaderboard, { type: 'bar',
+      data: { labels: counts.map(c => c[0]),
+        datasets: [{ data: counts.map(c => c[1]), backgroundColor: counts.map(c => colorOf(c[0])), borderRadius: 2 }] },
+      options: { indexAxis: 'y', ...HOVER, plugins: { legend: { display: false }, ...TIP } } });
+
+    const artists = year === 'all'
+      ? Object.entries(allArtists).sort((a, b) => b[1] - a[1]).slice(0, 15)
+      : D.years[year].top_artists;
+    if (ta) ta.destroy();
+    ta = new Chart(topArtists, { type: 'bar',
+      data: { labels: artists.map(a => a[0]), datasets: [{ data: artists.map(a => a[1]), backgroundColor: TEAL, hoverBackgroundColor: CYAN, borderRadius: 2 }] },
+      options: { indexAxis: 'y', ...HOVER, plugins: { legend: { display: false }, ...TIP } } });
+
+    const months = Object.keys(D.timeline);
+    if (tl) tl.destroy();
+    tl = new Chart(timeline, { type: 'line',
+      data: { labels: months,
+        datasets: [{ data: months.map(m => D.timeline[m].total), borderColor: CYAN,
+          backgroundColor: 'rgba(62,143,174,0.16)', fill: true, tension: 0.3, pointRadius: 0,
+          pointHoverRadius: 4, pointHoverBackgroundColor: CORAL,
+          segment: { borderColor: c => year !== 'all' && !months[c.p0DataIndex].startsWith(year) ? 'rgba(157,180,189,.25)' : CYAN } }] },
+      options: { ...HOVER, plugins: { legend: { display: false }, ...TIP } } });
+  }
+  charts();
+
+  // person cards
+  const hourTag = h => h === null ? '?' :
+    h < 5 ? `${h}:00 — night gremlin` : h < 12 ? `${h}:00 — morning person` :
+    h < 18 ? `${h}:00 — afternoon` : `${h}:00 — evening`;
+  const peopleDiv = document.getElementById('people');
+  Object.entries(D.people).sort((a, b) => b[1].totals.shares - a[1].totals.shares).forEach(([n, p]) => {
+    if (p.totals.shares === 0) return;
+    const peak = p.hours.indexOf(Math.max(...p.hours));
+    const topDecade = Object.keys(p.decades)[0] || '?';
+    const d = document.createElement('div');
+    d.className = 'person';
+    d.style.setProperty('--pc', colorOf(n));
+    const fsTrack = p.first_share && D.tracks[p.first_share.uri];
+    const firstShare = p.first_share
+      ? (fsTrack ? `${tlink(p.first_share.uri, fsTrack.name)} · ${p.first_share.ts.slice(0,10)}`
+                 : p.first_share.ts.slice(0,10))
+      : '—';
+    d.innerHTML = `
+      <h3>${p.display}</h3>
+      <div class="stat"><span>Songs shared</span><b>${p.totals.shares}</b></div>
+      <div class="stat"><span>Unique tracks</span><b>${p.totals.unique}</b></div>
+      <div class="stat"><span>Messages</span><b>${p.totals.messages.toLocaleString()}</b></div>
+      <div class="stat"><span>Memes posted</span><b>${p.totals.media}</b></div>
+      <div class="stat"><span>Said "banger"</span><b>${p.totals.bangers}×</b></div>
+      <div class="stat"><span>Deleted msgs</span><b>${p.totals.deleted}</b></div>
+      <div class="stat"><span>Mainstream score</span><b>${p.avg_popularity}/100</b></div>
+      <div class="stat"><span>Favourite era</span><b>${topDecade}</b></div>
+      <div class="stat"><span>Peak hour</span><b>${hourTag(peak)}</b></div>
+      <div class="stat"><span>First share</span><b>${firstShare}</b></div>
+      <div class="toplist"><b>Artists:</b> ${p.top_artists.slice(0,5).map(a => `${a[0]} (${a[1]})`).join(', ') || '—'}</div>
+      <div class="toplist"><b>Genres:</b> ${p.top_genres.map(g => g[0]).join(', ') || '—'}</div>`;
+    peopleDiv.appendChild(d);
+  });
+
+  // crossover + reshared (derived from tracks) — track names link to Spotify
+  const entries = Object.entries(D.tracks);
+  const cross = entries.filter(([, t]) => Object.keys(t.shared_by).length >= 2)
+    .sort((a, b) => Object.keys(b[1].shared_by).length - Object.keys(a[1].shared_by).length).slice(0, 40);
+  cross.forEach(([uri, t]) => {
+    const r = document.getElementById('crossover').insertRow();
+    r.innerHTML = `<td>${tlink(uri, t.name)}</td><td>${t.artists.join(', ')}</td>
+      <td>${Object.keys(t.shared_by).map(p => `<span class="pill">${disp(p)}</span>`).join('')}</td>`;
+  });
+  const resh = entries.map(([uri, t]) => [uri, t, Object.values(t.shared_by).reduce((a, b) => a + b, 0)])
+    .filter(([, , n]) => n >= 2).sort((a, b) => b[2] - a[2]).slice(0, 15);
+  resh.forEach(([uri, t, n]) => {
+    const r = document.getElementById('reshared').insertRow();
+    r.innerHTML = `<td>${tlink(uri, t.name)}</td><td>${t.artists.join(', ')}</td><td>${n}</td>`;
+  });
+
+  // trendsetters — no artist id in data.json, deep-link to Spotify search
+  D.trendsetters.slice(0, 12).forEach(t => {
+    const r = document.getElementById('trend').insertRow();
+    r.innerHTML = `<td>${alink(t.artist)}</td><td>${disp(t.first_by)}</td><td>${t.first_ts}</td>
+      <td>${t.adopters}</td><td>${t.total_shares}</td>`;
+  });
+
+  // similarity heatmap — teal scale
+  const names = D.similarity.people.slice(0, 8);
+  let html = '<table class="sim"><tr><td></td>' +
+    names.map(n => `<th>${disp(n).slice(0, 7)}</th>`).join('') + '</tr>';
+  names.forEach((a, i) => {
+    html += `<tr><td class="rowname">${disp(a)}</td>`;
+    names.forEach((b, j) => {
+      const v = D.similarity.matrix[i][j];
+      const alpha = i === j ? 0 : Math.min(v * 1.8, 1);
+      html += `<td style="background:rgba(62,143,174,${alpha.toFixed(2)})">${i === j ? '—' : v.toFixed(2)}</td>`;
+    });
+    html += '</tr>';
+  });
+  document.getElementById('sim').innerHTML = html + '</table>';
+}
+</script>
+</body>
+</html>

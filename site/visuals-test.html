@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visuals test — Mandatory Vibe Compliance</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #05060a; color: #fff; font: 14px/1.5 system-ui, sans-serif; }
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+  section { position: relative; z-index: 1; height: 100vh; overflow: hidden; }
+  .stage { position: absolute; inset: 0; }
+  .caption { position: absolute; left: 24px; top: 18px; z-index: 5; pointer-events: none;
+             font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .75; }
+  #panel { position: fixed; right: 12px; top: 12px; z-index: 50; background: rgba(10,8,22,.85);
+           border: 1px solid rgba(255,255,255,.15); border-radius: 10px; padding: 10px;
+           display: flex; flex-direction: column; gap: 6px; width: 200px; }
+  #panel button, #panel select { background: #1c1640; color: #fff; border: 1px solid rgba(255,255,255,.2);
+           border-radius: 6px; padding: 5px 8px; font: inherit; cursor: pointer; }
+  #status { font-size: 11px; opacity: .8; white-space: pre-wrap; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<section><div class="caption">1 · vinyl</div><div id="vinyl" class="stage"></div></section>
+<section><div class="caption">2 · galaxy (drag / wheel / hover / click&nbsp;→&nbsp;spotify)</div><div id="galaxy" class="stage"></div></section>
+<section><div class="caption">3 · constellation (hover a node)</div><div id="constellation" class="stage"></div></section>
+<section><div class="caption">4 · end (scroll drives fractal hue)</div></section>
+
+<div id="panel">
+  <select id="focusSel"><option value="">focusPerson: none</option></select>
+  <label>setScroll <input id="scrollSlider" type="range" min="0" max="100" value="0" style="width:100%"></label>
+  <button id="pauseBtn">pause all</button>
+  <button id="startBtn">start all</button>
+  <button id="disposeBtn">dispose all</button>
+  <div id="status">booting…</div>
+</div>
+
+<script type="module">
+import { initFractalBg } from "./js/visuals/fractal-bg.js";
+import { initGalaxy } from "./js/visuals/galaxy.js";
+import { initVinyl } from "./js/visuals/vinyl.js";
+import { initConstellation } from "./js/visuals/constellation.js";
+
+const PALETTE = {
+  Uday: "#ff5c9b", Shridhar: "#00f0c8", Pratyush: "#9b5cff", Ammar: "#ffb86b",
+  Dhawal: "#5cc8ff", Sameer: "#b6ff5c", Dhruvajit: "#ff8a5c", Kunal: "#5c7cff",
+  Tushar: "#ffe45c", Praneet: "#ff5c5c", Karan: "#5cffb0", Shaury: "#d05cff", Ankit: "#8a93a6",
+};
+const NAMES = Object.keys(PALETTE);
+const status = document.getElementById("status");
+const log = (m) => { status.textContent = m; console.log("[test]", m); };
+
+const qs = new URLSearchParams(location.search);
+const opts = {
+  mobile: qs.get("mobile") === "1" || matchMedia("(pointer: coarse)").matches,
+  dprCap: matchMedia("(pointer: coarse)").matches ? 1.5 : 2,
+  reducedMotion: qs.get("rm") === "1" || matchMedia("(prefers-reduced-motion: reduce)").matches,
+  personColors: PALETTE,
+};
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function fakeData() {
+  const rng = mulberry32(99);
+  const start = Date.UTC(2024, 0, 5);
+  const span = 880 * 24 * 3600 * 1000;
+  const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  const fakeId = () => Array.from({ length: 22 }, () => B62[(rng() * 62) | 0]).join("");
+  const items = [];
+  for (let i = 0; i < 951; i++) {
+    const by = NAMES[(rng() * NAMES.length) | 0];
+    items.push({
+      art: `https://picsum.photos/seed/${i}/300/300`,
+      name: `Fake Track ${i + 1}`,
+      artists: `Artist ${1 + ((rng() * 200) | 0)}`,
+      by,
+      ts: new Date(start + (i / 950) * span + rng() * 36e5).toISOString(),
+      color: PALETTE[by],
+      uri: `spotify:track:${fakeId()}`,
+    });
+  }
+  const n = NAMES.length;
+  const matrix = Array.from({ length: n }, () => new Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    matrix[i][i] = 1;
+    for (let j = i + 1; j < n; j++) matrix[i][j] = matrix[j][i] = +(0.12 + rng() * 0.7).toFixed(3);
+  }
+  const shares = {};
+  for (const p of NAMES) shares[p] = 25 + ((rng() * 160) | 0);
+  const pool = Array.from({ length: 40 }, (_, i) => `Shared Artist ${i + 1}`);
+  const topArtists = {};
+  for (const p of NAMES)
+    topArtists[p] = pool.filter(() => rng() < 0.4).map((a) => [a, 1 + ((rng() * 18) | 0)]);
+  return { items, sim: { people: NAMES, matrix, shares, colors: PALETTE, topArtists } };
+}
+
+async function realData() {
+  const res = await fetch("./data.json");
+  if (!res.ok) throw new Error("data.json fetch failed: " + res.status);
+  const data = await res.json();
+  const entries = Object.entries(data.tracks || {}).filter(([, t]) => t.first && t.first.ts);
+  entries.sort((a, b) => new Date(a[1].first.ts) - new Date(b[1].first.ts));
+  const items = entries.map(([uri, t]) => ({
+    art: t.art,
+    name: t.name,
+    artists: Array.isArray(t.artists) ? t.artists.join(", ") : String(t.artists || ""),
+    by: t.first.by,
+    ts: t.first.ts,
+    color: PALETTE[t.first.by] || "#8a93a6",
+    uri,
+  }));
+  const people = (data.similarity && data.similarity.people) || NAMES;
+  const shares = {}, topArtists = {};
+  for (const p of people) {
+    const pd = data.people && data.people[p];
+    shares[p] = (pd && pd.totals && pd.totals.shares) || 0;
+    if (pd && pd.top_artists) topArtists[p] = pd.top_artists;
+  }
+  return {
+    items,
+    sim: { people, matrix: (data.similarity && data.similarity.matrix) || [], shares, colors: PALETTE, topArtists },
+  };
+}
+
+const handles = {};
+(async () => {
+  let items, sim;
+  try {
+    ({ items, sim } = qs.get("real") === "1" ? await realData() : fakeData());
+  } catch (e) {
+    log("data error: " + e.message);
+    return;
+  }
+  const errs = [];
+  try {
+    handles.bg = await initFractalBg(document.getElementById("bg"), opts);
+    handles.bg.start();
+  } catch (e) { errs.push("fractal: " + e.message); }
+  try {
+    handles.vinyl = await initVinyl(document.getElementById("vinyl"), {
+      ...opts, labelTitle: "MANDATORY VIBE", labelSubtitle: "compliance division", coverUrl: items[0] && items[0].art,
+    });
+    handles.vinyl.start();
+  } catch (e) { errs.push("vinyl: " + e.message); }
+  try {
+    handles.galaxy = await initGalaxy(document.getElementById("galaxy"), items, opts);
+    handles.galaxy.start();
+  } catch (e) { errs.push("galaxy: " + e.message); }
+  try {
+    handles.constellation = await initConstellation(document.getElementById("constellation"), sim, opts);
+    handles.constellation.start();
+  } catch (e) { errs.push("constellation: " + e.message); }
+  log(errs.length ? errs.join("\n") : `ok · ${items.length} items · ${sim.people.length} people` +
+    (opts.mobile ? " · mobile" : "") + (opts.reducedMotion ? " · reduced-motion" : ""));
+
+  const sel = document.getElementById("focusSel");
+  for (const p of sim.people) {
+    const o = document.createElement("option");
+    o.value = o.textContent = p;
+    sel.appendChild(o);
+  }
+  sel.onchange = () => handles.galaxy && handles.galaxy.focusPerson(sel.value || null);
+  document.getElementById("scrollSlider").oninput = (e) =>
+    handles.bg && handles.bg.setScroll(e.target.value / 100);
+  document.getElementById("pauseBtn").onclick = () =>
+    Object.values(handles).forEach((h) => h.pause && h.pause());
+  document.getElementById("startBtn").onclick = () =>
+    Object.values(handles).forEach((h) => h.start && h.start());
+  document.getElementById("disposeBtn").onclick = () => {
+    Object.values(handles).forEach((h) => h.dispose && h.dispose());
+    log("disposed");
+  };
+
+  addEventListener("scroll", () => {
+    const p = scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight);
+    if (handles.bg) handles.bg.setScroll(p);
+  }, { passive: true });
+  addEventListener("resize", () => Object.values(handles).forEach((h) => h.resize && h.resize()));
+})();
+</script>
+</body>
+</html>

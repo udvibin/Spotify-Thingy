@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bg lab — Mandatory Vibe Compliance</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #060409; color: #eee9dd; font: 13px/1.5 "Space Grotesk", system-ui, sans-serif; }
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+  #panel { position: fixed; right: 12px; top: 12px; z-index: 50; background: rgba(8,6,16,.88);
+           border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 12px 14px;
+           display: flex; flex-direction: column; gap: 7px; width: 270px; backdrop-filter: blur(6px);
+           max-height: calc(100vh - 24px); overflow-y: auto; }
+  #panel h1 { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 2px; opacity: .7; }
+  .row { display: grid; grid-template-columns: 86px 1fr 44px; gap: 8px; align-items: center; }
+  .row label { opacity: .85; }
+  .row .val { text-align: right; font-variant-numeric: tabular-nums; opacity: .7; }
+  input[type=range] { width: 100%; accent-color: #d9412e; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  button { background: #1b1430; color: #eee9dd; border: 1px solid rgba(255,255,255,.2);
+           border-radius: 7px; padding: 5px 10px; font: inherit; cursor: pointer; }
+  button:hover { background: #2a2046; }
+  #status { font-size: 11px; opacity: .75; white-space: pre-wrap; }
+  /* sample site-ish copy to judge readability over the bg */
+  #sample { position: fixed; inset: 0; z-index: 1; display: grid; place-items: center;
+            pointer-events: none; text-align: center; padding: 24px; }
+  #sample.hidden { display: none; }
+  #sample .kicker { letter-spacing: .22em; text-transform: uppercase; font-size: 12px; color: #d9412e; }
+  #sample h2 { font-family: Georgia, "Times New Roman", serif; font-style: italic;
+               font-size: clamp(34px, 6vw, 72px); margin: 10px 0 14px; font-weight: 500; }
+  #sample p { max-width: 520px; margin: 0 auto; opacity: .85; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<div id="sample">
+  <div>
+    <div class="kicker">01 — The numbers</div>
+    <h2>Mandatory Vibe Compliance</h2>
+    <p>Four years of songs thrown into one group chat. 987 shares, 951 tracks,
+       13 bois, zero skips (allegedly). Sample copy to judge readability.</p>
+  </div>
+</div>
+
+<div id="panel">
+  <h1>bg lab</h1>
+  <div id="sliders"></div>
+  <div class="row"><label>scroll</label><input id="scroll" type="range" min="0" max="1" step="0.01" value="0"><span class="val" id="scrollVal">0</span></div>
+  <div class="btns">
+    <button id="pauseBtn">pause</button>
+    <button id="resetBtn">reset</button>
+    <button id="copyBtn">copy params</button>
+    <button id="textBtn">text on/off</button>
+  </div>
+  <div id="status">booting…</div>
+</div>
+
+<script type="module">
+import { initFractalBg, BG_DEFAULTS } from "./js/visuals/fractal-bg.js";
+
+// label, key, min, max, step
+const SLIDERS = [
+  ["speed",     "speed",    0,    6,   0.05],
+  ["line freq", "lineFreq", 8,    90,  1],
+  ["tri size",  "triSize",  0.08, 0.6, 0.005],
+  ["squeeze",   "squeeze",  0.4,  7,   0.05],
+  ["wake amp",  "wakeAmp",  0,    0.4, 0.005],
+  ["wake freq", "wakeFreq", 2,    24,  0.25],
+  ["vort str",  "vortStr",  0,    0.5, 0.005],
+  ["vort x",    "vortX",   -1.5,  2,   0.01],
+  ["vort y",    "vortY",    0,    1.5, 0.01],
+  ["vort core", "vortSoft", 0.005,0.15,0.001],
+  ["vort bend", "vortBend", 0,    1,   0.01],
+  ["ring amt",  "ringAmt",  0,    1,   0.01],
+  ["ring tint", "ringTint", 0,    1,   0.01],
+  ["warp",      "warpAmt",  0,    0.6, 0.005],
+  ["waviness",  "waveAmt",  0,    0.25,0.005],
+  ["line amp",  "lineAmp",  0,    0.9, 0.01],
+  ["red line",  "redAmt",   0,    1.5, 0.02],
+  ["triangle",  "triAmt",   0,    1.5, 0.02],
+  ["drift",     "drift",    0,    6,   0.05],
+  ["lum cap",   "lumCap",   0.06, 0.5, 0.005],
+];
+
+const status = document.getElementById("status");
+const slidersEl = document.getElementById("sliders");
+const inputs = {};
+
+let bg;
+try {
+  bg = await initFractalBg(document.getElementById("bg"), {
+    mobile: matchMedia("(max-width: 720px)").matches,
+    reducedMotion: false,
+  });
+  bg.start();
+  status.textContent = "running";
+} catch (e) {
+  status.textContent = "INIT FAILED: " + e.message;
+  throw e;
+}
+
+for (const [label, key, min, max, step] of SLIDERS) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}"><span class="val"></span>`;
+  const input = row.querySelector("input");
+  const val = row.querySelector(".val");
+  const show = (v) => { val.textContent = Number(v).toFixed(step < 0.01 ? 3 : step < 1 ? 2 : 0); };
+  input.value = BG_DEFAULTS[key];
+  show(input.value);
+  input.addEventListener("input", () => { bg.setParams({ [key]: input.value }); show(input.value); });
+  inputs[key] = { input, show };
+  slidersEl.appendChild(row);
+}
+
+const scrollIn = document.getElementById("scroll");
+scrollIn.addEventListener("input", () => {
+  bg.setScroll(scrollIn.value);
+  document.getElementById("scrollVal").textContent = Number(scrollIn.value).toFixed(2);
+});
+
+let paused = false;
+document.getElementById("pauseBtn").addEventListener("click", (e) => {
+  paused = !paused;
+  paused ? bg.pause() : bg.start();
+  e.target.textContent = paused ? "play" : "pause";
+});
+document.getElementById("resetBtn").addEventListener("click", () => {
+  bg.setParams(BG_DEFAULTS);
+  for (const [, key] of SLIDERS.map((s) => [s[0], s[1]])) {
+    inputs[key].input.value = BG_DEFAULTS[key];
+    inputs[key].show(BG_DEFAULTS[key]);
+  }
+});
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  const json = JSON.stringify(bg.getParams(), null, 2);
+  try { await navigator.clipboard.writeText(json); status.textContent = "copied:\n" + json; }
+  catch { status.textContent = json; } // clipboard blocked: show it, copy by hand
+});
+document.getElementById("textBtn").addEventListener("click", () => {
+  document.getElementById("sample").classList.toggle("hidden");
+});
+
+addEventListener("resize", () => bg.resize());
+</script>
+</body>
+</html>

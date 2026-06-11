@@ -449,6 +449,36 @@ def get_track_details_for_logging(sp: spotipy.Spotify, track_uris: list[str]) ->
     return track_details_list
 
 
+# Version-suffix words that mark "same recording, different release" variants.
+# Deliberate different recordings (e.g. "Song - NOTION Remix", "Song - Extended")
+# are NOT stripped: the suffix must START with one of these words (optionally
+# preceded by a year, e.g. "- 2014 Remaster") to count as a version label.
+_VERSION_SUFFIX = (
+    r"(?:\d{4}\s+)?"
+    r"(?:remaster(?:ed)?|mono|stereo|single|original|version|edit|deluxe|bonus)\b"
+)
+
+
+def normalize_track_detail(detail: str) -> str:
+    """
+    Dedup key for "Song Name by Artist1, Artist2" strings.
+
+    Lowercases and strips version suffixes from the song name so
+    "Song - Remastered 2009 by X" == "Song by X". Prevents an Apple search
+    that resolves to a different *release* of an already-present song from
+    re-adding it as a duplicate (the exact-string check misses those).
+    """
+    s = detail.lower().strip()
+    if " by " in s:
+        name, artists = s.rsplit(" by ", 1)
+    else:
+        name, artists = s, ""
+    name = re.sub(r"\s*[-–]\s*" + _VERSION_SUFFIX + r".*$", "", name)
+    name = re.sub(r"\s*[(\[]" + _VERSION_SUFFIX + r"[^)\]]*[)\]]", "", name)
+    name = re.sub(r"[^\w\s]", "", name).strip()
+    return f"{name} by {artists.strip()}"
+
+
 # =============================================================================
 # APPLE MUSIC PARSING & SEARCH
 # =============================================================================
@@ -1015,7 +1045,9 @@ def process_spotify_from_drive():
                                     # Get existing track names to detect "same song, different version"
                                     # This prevents Apple Music links adding duplicates of existing songs
                                     existing_details = get_track_details_for_logging(sp, existing_uris_list)
-                                    existing_names_lower = {detail.lower() for detail in existing_details if detail}
+                                    existing_names_normed = {
+                                        normalize_track_detail(detail) for detail in existing_details if detail
+                                    }
 
                                     # Get details for candidates to check against existing names
                                     candidate_details = get_track_details_for_logging(sp, ordered_track_uris_from_chat)
@@ -1027,14 +1059,14 @@ def process_spotify_from_drive():
                                             continue
 
                                         # Skip if same name+artist already exists (Apple Music different version)
-                                        if detail and detail.lower() in existing_names_lower:
+                                        if detail and normalize_track_detail(detail) in existing_names_normed:
                                             continue
 
                                         to_add.append(uri)
                                         # Track the accepted name so the same song shared again
                                         # in this batch (e.g. from a different album) is skipped
                                         if detail:
-                                            existing_names_lower.add(detail.lower())
+                                            existing_names_normed.add(normalize_track_detail(detail))
 
                                     if to_add:
                                         # Overridden by the success summary below if any adds went through
