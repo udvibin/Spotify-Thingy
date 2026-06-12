@@ -56,6 +56,7 @@ function loadImage(url) {
   return new Promise((res) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
+    img.decoding = "async";
     img.onload = () => res(img);
     img.onerror = () => res(null);
     img.src = url;
@@ -214,34 +215,39 @@ export async function initGalaxy(container, items, opts = {}) {
   stars.frustumCulled = false;
   group.add(stars);
 
-  // --- progressive texture loading (batches of ~24, small concurrency queue) ---
+  // --- progressive texture loading (small concurrency queue; mobile pulls the
+  // 64px art variant — ~5x fewer bytes for 128px atlas cells) ---
   (async () => {
     const jobs = [];
     for (let i = 0; i < N; i++) if (slotted[i]) jobs.push(i);
     let cursor = 0;
     const dirty = new Set();
     let pending = [];
+    let lastFlush = performance.now();
     const flush = () => {
       dirty.forEach((a) => { atlases[a].texture.needsUpdate = true; });
       dirty.clear();
       for (const i of pending) st[i].tTex = 1; // crossfade only after GPU upload is queued
       if (pending.length) settled = false;
       pending = [];
+      lastFlush = performance.now();
     };
     const worker = async () => {
       while (!disposed && cursor < jobs.length) {
         const i = jobs[cursor++];
-        const img = await loadImage(items[i].art);
+        const it = items[i];
+        const img = await loadImage((opts.mobile && it.artSm) || it.art);
         if (disposed) return;
         if (!img) continue; // failed: colored quad stays
         const { a, s } = slotted[i];
         try { atlases[a].ctx.drawImage(img, (s % GRID) * CELL, ((s / GRID) | 0) * CELL, CELL, CELL); } catch { continue; }
         dirty.add(a);
         pending.push(i);
-        if (pending.length >= 24) flush();
+        // flush on size OR time so slow networks still show steady progress
+        if (pending.length >= 24 || performance.now() - lastFlush > 700) flush();
       }
     };
-    await Promise.all(Array.from({ length: opts.mobile ? 4 : 6 }, worker));
+    await Promise.all(Array.from({ length: opts.mobile ? 6 : 6 }, worker));
     if (!disposed) flush();
   })();
 

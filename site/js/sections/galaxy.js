@@ -9,6 +9,7 @@ export function initGalaxy(ctx) {
   const items = Object.entries(tracks).map(([uri, t]) => ({
     uri, // "spotify:track:<id>" — the visual builds the open.spotify.com link from it
     art: t.art,
+    artSm: t.art_sm || "",
     name: t.name,
     artists: (t.artists || []).join(", "),
     by: t.first?.by || "",
@@ -27,7 +28,8 @@ export function initGalaxy(ctx) {
     const count = ctx.mobile ? 48 : 96;
     for (const it of items.slice(-count)) { // most recent covers
       const img = el("img");
-      img.src = it.art; img.alt = `${it.name} — ${it.artists}`;
+      img.src = (ctx.mobile && it.artSm) || it.art;
+      img.alt = `${it.name} — ${it.artists}`;
       img.loading = "lazy"; img.dataset.by = it.by;
       grid.append(img);
     }

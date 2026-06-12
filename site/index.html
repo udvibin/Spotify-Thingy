@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="stylesheet" href="./css/style.css">
 <script type="importmap">
 {
@@ -37,15 +38,16 @@
 
   <!-- 1 · hero -->
   <header class="sec hero" id="hero">
-    <p class="overline" id="hero-overline">MANDATORY VIBE COMPLIANCE · EST. AUG 2021</p>
-    <h1 class="hero-line" id="hero-line">A few years. A lot of songs.</h1>
+    <p class="overline" id="hero-overline">EST. AUG 2021</p>
+    <h1 class="hero-line" id="hero-line">Mandatory <em class="grad">Vibe</em> Compliance</h1>
+    <p class="hero-sub" id="hero-sub">a few years, a lot of songs.</p>
     <div class="viz vinyl-stage" id="vinyl-stage">
       <div class="fallback vinyl-disc" aria-hidden="true"><span class="vinyl-label"><b>MVC</b><small>est. 2021</small></span></div>
     </div>
   </header>
 
   <!-- 2 · the numbers -->
-  <section class="sec" id="numbers">
+  <section class="sec glass" id="numbers">
     <p class="kicker" data-reveal><span class="knum">01</span>The numbers</p>
     <h2 class="sec-title" data-reveal>Compliance, <em class="grad">quantified.</em></h2>
     <p class="sub" data-reveal>vibes have been thoroughly enforced.</p>
@@ -58,8 +60,10 @@
       <div class="fallback art-grid" id="galaxy-fallback"></div>
     </div>
     <div class="stage-overlay top">
-      <p class="kicker" data-reveal><span class="knum">02</span>The archive</p>
-      <h2 class="sec-title sm" data-reveal>Every cover, <em class="grad">ever.</em></h2>
+      <div class="glass-scrim">
+        <p class="kicker" data-reveal><span class="knum">02</span>The archive</p>
+        <h2 class="sec-title sm" data-reveal>Every cover, <em class="grad">ever.</em></h2>
+      </div>
     </div>
     <div class="stage-overlay bottom">
       <div class="chips" id="galaxy-chips" role="group" aria-label="filter by person"></div>
@@ -67,7 +71,7 @@
   </section>
 
   <!-- 4 · leaderboard -->
-  <section class="sec" id="leaderboard">
+  <section class="sec glass" id="leaderboard">
     <p class="kicker" data-reveal><span class="knum">03</span>The leaderboard</p>
     <h2 class="sec-title" data-reveal>Who <em class="grad">carried?</em></h2>
     <p class="sub" data-reveal>shares per boi. no participation trophies. hover a row for the year-by-year.</p>
@@ -76,7 +80,7 @@
   </section>
 
   <!-- 5 · the bois -->
-  <section class="sec wide" id="bois">
+  <section class="sec wide glass" id="bois">
     <p class="kicker" data-reveal><span class="knum">04</span>The cast</p>
     <h2 class="sec-title" data-reveal>The <em class="grad">bois.</em></h2>
     <p class="sub" data-reveal>thirteen certified taste profiles. swipe →</p>
@@ -84,7 +88,7 @@
   </section>
 
   <!-- 6 · certified group bangers -->
-  <section class="sec" id="bangers">
+  <section class="sec glass" id="bangers">
     <p class="kicker" data-reveal><span class="knum">05</span>Group consensus</p>
     <h2 class="sec-title" data-reveal>Certified <em class="grad">bangers.</em></h2>
     <p class="sub" data-reveal>crossovers — songs more than one of the bois had to share. tap a cover to play it.</p>
@@ -101,14 +105,16 @@
       <div class="fallback pairs" id="pairs"></div>
     </div>
     <div class="stage-overlay top">
-      <p class="kicker" data-reveal><span class="knum">06</span>Group dynamics</p>
-      <h2 class="sec-title sm" data-reveal>The taste <em class="grad">constellation.</em></h2>
-      <p class="sub" data-reveal>closer &amp; brighter = more shared artists.</p>
+      <div class="glass-scrim">
+        <p class="kicker" data-reveal><span class="knum">06</span>Group dynamics</p>
+        <h2 class="sec-title sm" data-reveal>The taste <em class="grad">constellation.</em></h2>
+        <p class="sub" data-reveal>closer &amp; brighter = more shared artists.</p>
+      </div>
     </div>
   </section>
 
   <!-- 8 · timeline -->
-  <section class="sec" id="timeline">
+  <section class="sec glass" id="timeline">
     <p class="kicker" data-reveal><span class="knum">07</span>The pulse</p>
     <h2 class="sec-title" data-reveal>The <em class="grad">heartbeat.</em></h2>
     <p class="sub" data-reveal>songs per month, since day one.</p>
@@ -119,7 +125,7 @@
   </section>
 
   <!-- 9 · trendsetters -->
-  <section class="sec" id="trendsetters">
+  <section class="sec glass" id="trendsetters">
     <p class="kicker" data-reveal><span class="knum">08</span>Patient zero</p>
     <h2 class="sec-title" data-reveal>Who put <em class="grad">you on?</em></h2>
     <p class="sub" data-reveal>first to share an artist the group later adopted.</p>
@@ -127,17 +133,21 @@
   </section>
 
   <!-- 10 · outro -->
-  <section class="sec" id="outro">
+  <section class="sec glass" id="outro">
     <p class="kicker" data-reveal><span class="knum">09</span>For the record</p>
     <h2 class="sec-title" data-reveal>The <em class="grad">receipts.</em></h2>
     <div class="facts" id="facts"></div>
     <p class="closing" data-reveal>As long as the group lives on, this page keeps counting.</p>
-    <p class="sync" data-reveal>Last sync <span id="sync-date">—</span> · <a class="tlink" href="./dashboard.html">nerd view →</a></p>
+    <a class="nerd-cta" href="./dashboard.html" data-reveal>
+      <span class="big">want every chart, every table?</span>
+      <span class="go">open the nerd view →</span>
+    </a>
+    <p class="sync" data-reveal>Last sync <span id="sync-date">—</span></p>
   </section>
 
 </main>
 
-<footer>built with the bot · data from the chat itself</footer>
+<footer>built with ❤️</footer>
 
 <noscript><style>#loader{display:none}[data-reveal]{opacity:1!important;transform:none!important}</style>
 <p style="text-align:center;padding:2rem">This page needs JavaScript to count the bangers.</p></noscript>

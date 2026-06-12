@@ -133,7 +133,6 @@ scripts/
   spotify.py                # the sync bot
 dashboard/
   common.py                 # chat parser, NAME_MAP / DISPLAY_NAMES
-  backfill_history.py       # one-time: old archive -> history.json
   generate.py               # history + live export -> site/data.json
   history.json              # committed derived history (ts, sender, uri)
   resolution_cache.json     # link->URI + metadata cache (committed)

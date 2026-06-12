@@ -1,4 +1,4 @@
-// Hero vinyl: near-top-down record with analytic groove shading.
+// Hero vinyl: direct top-down record with analytic groove shading.
 // The disc is a custom shader (micro grooves + anisotropic sheen + track lands
 // + edge bevel) so it stays crisp at any resolution; the paper label spins.
 import * as THREE from "three";
@@ -220,7 +220,8 @@ export async function initVinyl(container, opts = {}) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
-  camera.position.set(0, 4.35, 1.55);       // near top-down, slight tilt for depth
+  camera.position.set(0, 4.6, 0);           // straight down — symmetric disc
+  camera.up.set(0, 0, -1);                  // screen-up = label-up when looking down
   camera.lookAt(0, 0, 0);
 
   const group = new THREE.Group();   // pointer tilt + wobble
@@ -289,11 +290,11 @@ export async function initVinyl(container, opts = {}) {
     img.src = opts.coverUrl;
   }
 
-  const baseTilt = { x: 0, z: opts.mobile ? 0.05 : 0 };
+  const baseTilt = { x: 0, z: 0 };          // rests dead-symmetric top-down
   const tiltTarget = { x: 0, z: 0 };
   const onPointer = (e) => {
-    tiltTarget.x = (e.clientY / window.innerHeight - 0.5) * 0.16;
-    tiltTarget.z = -(e.clientX / window.innerWidth - 0.5) * 0.16;
+    tiltTarget.x = (e.clientY / window.innerHeight - 0.5) * 0.09;
+    tiltTarget.z = -(e.clientX / window.innerWidth - 0.5) * 0.09;
   };
   const interactive = !opts.mobile && !opts.reducedMotion;
   if (interactive) window.addEventListener("pointermove", onPointer, { passive: true });
@@ -302,7 +303,6 @@ export async function initVinyl(container, opts = {}) {
     platter.rotation.y = 0.8;
     uniforms.uSpin.value = 0.8;
     uniforms.uTime.value = 5.0;
-    group.rotation.z = 0.03;
   }
 
   const camDir = camera.position.clone().normalize();
@@ -314,7 +314,7 @@ export async function initVinyl(container, opts = {}) {
     // the stage's aspect (it used to clip at a fixed distance).
     const vt = Math.tan((camera.fov * Math.PI) / 360);
     const margin = 1.18;
-    const dV = (DISC_R * 0.95 * margin) / vt;            // vertical (foreshortened)
+    const dV = (DISC_R * margin) / vt;                   // vertical
     const dH = (DISC_R * margin) / (vt * camera.aspect); // horizontal
     camera.position.copy(camDir).multiplyScalar(Math.max(dV, dH));
     camera.lookAt(0, 0, 0);

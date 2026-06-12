@@ -136,7 +136,9 @@ def resolve_links(links: list[dict], sp, cache: dict) -> list[dict]:
 
 def fetch_metadata(sp, uris: list[str], cache: dict) -> None:
     tracks = cache["tracks"]
-    missing = [u for u in dict.fromkeys(uris) if u not in tracks]
+    # entries cached before art_sm existed get refetched once (cheap, batched)
+    missing = [u for u in dict.fromkeys(uris)
+               if u not in tracks or (tracks[u] and "art_sm" not in tracks[u])]
     print(f"Fetching metadata: {len(missing)} new tracks ({len(set(uris))} unique total)")
     for i in range(0, len(missing), 50):
         chunk = missing[i:i + 50]
@@ -151,12 +153,14 @@ def fetch_metadata(sp, uris: list[str], cache: dict) -> None:
                 continue
             images = t["album"].get("images") or []
             art = images[1]["url"] if len(images) > 1 else (images[0]["url"] if images else "")
+            art_sm = images[-1]["url"] if images else ""  # 64px — mobile galaxy atlas
             tracks[uri] = {
                 "name": t["name"],
                 "artists": [a["name"] for a in t["artists"]],
                 "artist_ids": [a["id"] for a in t["artists"] if a.get("id")],
                 "album": t["album"]["name"],
                 "art": art,
+                "art_sm": art_sm,
                 "release": t["album"].get("release_date") or "",
                 "popularity": t.get("popularity", 0),
                 "duration_ms": t.get("duration_ms", 0),
@@ -239,7 +243,7 @@ def build_data(msgs: list[dict], shares: list[dict], cache: dict) -> dict:
         if s["uri"] not in track_out:
             track_out[s["uri"]] = {
                 "name": t["name"], "artists": t["artists"], "album": t["album"],
-                "art": t["art"], "release": t["release"],
+                "art": t["art"], "art_sm": t.get("art_sm", ""), "release": t["release"],
                 "popularity": t["popularity"], "duration_ms": t["duration_ms"],
                 "shared_by": Counter(), "first": {"by": s["s"], "ts": s["ts"]},
             }

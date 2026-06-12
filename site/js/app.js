@@ -145,6 +145,11 @@ async function boot() {
   setupReveals();
   initGalaxyDim();
 
+  // dev: ?glass opens the frosted-glass tuner panel
+  if (new URLSearchParams(location.search).has("glass")) {
+    import("./glass-lab.js").then((m) => m.initGlassLab()).catch((e) => console.warn(e));
+  }
+
   // 4. drop loader, then start the background
   const loader = $("#loader");
   loader.classList.add("done");

@@ -13,29 +13,49 @@ already uses. Everything free: Spotify Web API, Drive API, Actions, Pages.
 | Story page (`site/index.html`) | ✅ built + 3 review rounds of polish |
 | Nerd view (`site/dashboard.html`) | ✅ done (Chart.js, year filters, instant tooltips) |
 | Background (vortex-shedding shader) | ✅ finalized with Uday; his params locked as `BG_DEFAULTS` in `fractal-bg.js` |
-| CI deploy (GitHub Pages) | ✅ wired in `spotify-automation.yaml` — first run pending |
+| CI deploy (GitHub Pages) | ✅ LIVE — https://udvibin.github.io/mandatory-vibe-compliance/ (deployed 11 Jun, end-to-end verified by Uday in Brave) |
 | Privacy | ✅ decided 11 Jun: publish with real first names |
 
 ## Tasks to take up
 
-1. **First deploy** — Uday commits + pushes, then:
-   - repo → public; Settings → Pages → Source = "GitHub Actions"
-   - run the workflow (workflow_dispatch) → site at `https://udvibin.github.io/<repo>/`
-   - custom domain later (is-a.dev subdomain or ~₹400/yr .in)
-2. **Galaxy wheel-zoom mechanic** — decide WITH Uday, then implement.
-   Candidates: zoom while a toggle/modifier is active; "click to enter" zoom
-   mode over the canvas; scroll-jacked pinned zoom segment. (Currently:
-   ctrl+wheel / pinch zooms, plain wheel scrolls the page.)
-3. **Two more background variants** — AFTER publish. Iterate in
-   `site/bg-lab.html` (sliders for all shader params, "copy params" button);
-   `initFractalBg` API stays, swap/extend the shader behind it.
-4. **Constellation v2 redesign** — rejected as-is: overlapping labels,
-   disconnected low-similarity nodes, weights unreadable. Rethink layout
-   (label collision avoidance, maybe 2D, dark backdrop like the galaxy).
-5. **Nerd-view CTA** — outro link to dashboard.html is too easy to miss;
-   make it a proper bordered call-to-action block.
-6. **Hero text rewrite** — current line kept for now; brainstorm openers
-   with Uday someday. Font (Fraunces + Space Grotesk) also kept.
+1. ~~First deploy~~ DONE 11 Jun — live at
+   https://udvibin.github.io/mandatory-vibe-compliance/ ; still open:
+   custom domain decision (is-a.dev subdomain or ~₹400/yr .in)
+2. ~~Galaxy wheel-zoom mechanic~~ DECIDED 12 Jun — current behaviour stays
+   (ctrl+wheel / pinch zooms, plain wheel scrolls). No further work.
+3. **Constellation v2 redesign** — THE remaining blocker before the big
+   push. Rejected as-is: overlapping labels, disconnected low-similarity
+   nodes, weights unreadable. Rethink layout (label collision avoidance,
+   maybe 2D, dark backdrop like the galaxy). Uday wants frontier-grade
+   data-viz here.
+4. ~~Nerd-view CTA~~ DONE 12 Jun — bordered `.nerd-cta` block in the outro
+   ("want every chart, every table? open the nerd view →"); footer is now
+   just "built with ❤️".
+5. ~~Galaxy mobile loading~~ DONE 12 Jun — pipeline now stores `art_sm`
+   (Spotify's 64px art) per track; mobile galaxy + fallback grid load it
+   instead of the 300px art (~5x fewer bytes), texture flushes are also
+   time-based (700 ms) so covers appear steadily on slow networks.
+6. ~~Glass defaults~~ LOCKED 12 Jun by Uday via ?glass tuner:
+   `--glass-fill:0; --glass-blur:7px; --glass-sat:160%` (pure refraction).
+
+## Scope creep (explicitly parked — do not pick up)
+
+- **Two more background variants** — bg-lab iteration; original task
+  retired 12 Jun as scope creep.
+- **Playable vinyl** — hero record that actually plays the playlist's
+  songs. Glorious. Parked.
+6. ~~Hero text rewrite~~ DONE 12 Jun — wordmark is now the H1:
+   "Mandatory *Vibe* Compliance" (coral italic "Vibe", matching the
+   section-title accent); computed stats line moved to a serif-italic
+   subline; overline is just "EST. AUG 2021". Fonts kept.
+7. ~~Favicon~~ DONE 12 Jun — `site/favicon.svg`, vinyl disc in the
+   Currents palette (linked from index + dashboard).
+8. ~~Text legibility over the background~~ DONE 12 Jun — liquid-glass
+   panels (`.sec.glass` in style.css): every text section sits in a
+   rounded frosted card (backdrop blur + saturate boost + bright inset
+   rim, low fill so the bg stays visible); galaxy/constellation overlay
+   text gets a smaller `.glass-scrim`. Falls back to near-solid panels
+   under `prefers-reduced-transparency`.
 
 ## Architecture (reference)
 
@@ -43,8 +63,8 @@ already uses. Everything free: Spotify Web API, Drive API, Actions, Pages.
 GitHub Actions is the "backend", the site is fully static.
 
 ```
-One-time (already run locally):
-  Shridhar archive ─> dashboard/backfill_history.py ─> dashboard/history.json
+One-time (already run; backfill_history.py deleted 12 Jun — in git history):
+  Shridhar archive ─> backfill_history.py ─> dashboard/history.json
   (only ts / sender / track-URI committed; raw chat text never enters git)
 
 Every 2 days (GitHub Actions, same job as the playlist sync):
@@ -94,6 +114,8 @@ derived client-side from `tracks.shared_by`. ~350 KB raw.
 
 - `cd site && python -m http.server 8901` → http://localhost:8901/
 - `site/bg-lab.html` — background tuning lab (all params live, copy-params)
+- `index.html?glass` — frosted-glass tuner (fill/blur/saturate sliders,
+  copy values → paste into the `--glass-*` vars in `:root` in style.css)
 - `site/visuals-test.html` — isolated visuals page (?real=1 / ?mobile=1)
 - `dev/verify_site.py` — full-page Playwright check (console errors, failed
   requests, screenshots per section into `dev/screens/`, gitignored)

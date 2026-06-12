@@ -76,8 +76,6 @@ export function words(n) {
   if (n < 1000) return ONES[(n / 100) | 0] + " hundred" + (n % 100 ? " " + words(n % 100) : "");
   return n.toLocaleString("en");
 }
-export const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-
 /* ---- instant tooltip (shared singleton; zero transition lag) ---- */
 let _tip = null;
 export function instantTip() {
