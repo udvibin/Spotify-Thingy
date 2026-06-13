@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mocks — nebulae + time machine</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #020409; color: #fff; font: 14px/1.5 system-ui, sans-serif; }
+  section { position: relative; height: 100vh; overflow: hidden; }
+  /* darker backdrop per Uday: near-black radial wash so the nebulae read properly */
+  #nebulae-sec { background: radial-gradient(ellipse at 50% 40%, #071019 0%, #020409 70%); }
+  #timemachine-sec { background: radial-gradient(ellipse at 50% 60%, #060d18 0%, #020409 75%); }
+  .stage { position: absolute; inset: 0; }
+  .caption { position: absolute; left: 24px; top: 18px; z-index: 20; pointer-events: none; }
+  .caption b { display: block; font-size: 18px; letter-spacing: .04em; }
+  .caption span { font-size: 12px; opacity: .6; }
+  #status { position: fixed; left: 12px; bottom: 10px; z-index: 50; font-size: 11px;
+            opacity: .75; white-space: pre-wrap; pointer-events: none; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<section id="nebulae-sec">
+  <div class="caption"><b>the genre nebulae</b>
+    <span>constellation v2 mock · drag to orbit · ctrl+wheel zoom · hover stars · chips trace a boi's constellation</span></div>
+  <div id="nebulae" class="stage"></div>
+</section>
+
+<section id="timemachine-sec">
+  <div class="caption"><b>the time machine</b>
+    <span>idea-4 mock · when it dropped vs when it hit the chat · hover stars · chips per boi</span></div>
+  <div id="timemachine" class="stage"></div>
+</section>
+
+<div id="status">booting…</div>
+
+<script type="module">
+import { initNebulae } from "./js/visuals/nebulae.js";
+import { initTimeMachine } from "./js/visuals/timemachine.js";
+
+const PALETTE = {
+  Uday: "#ff5c9b", Shridhar: "#00f0c8", Pratyush: "#9b5cff", Ammar: "#ffb86b",
+  Dhawal: "#5cc8ff", Sameer: "#b6ff5c", Dhruvajit: "#ff8a5c", Kunal: "#5c7cff",
+  Tushar: "#ffe45c", Praneet: "#ff5c5c", Karan: "#5cffb0", Shaury: "#d05cff", Ankit: "#8a93a6",
+};
+const status = document.getElementById("status");
+const log = (m) => { status.textContent = m; console.log("[mocks]", m); };
+
+const qs = new URLSearchParams(location.search);
+const opts = {
+  mobile: qs.get("mobile") === "1" || matchMedia("(pointer: coarse)").matches,
+  dprCap: matchMedia("(pointer: coarse)").matches ? 1.5 : 2,
+  reducedMotion: qs.get("rm") === "1" || matchMedia("(prefers-reduced-motion: reduce)").matches,
+  personColors: PALETTE,
+};
+
+const handles = {};
+(async () => {
+  let data, genre;
+  try {
+    [data, genre] = await Promise.all([
+      fetch("./data.json").then((r) => { if (!r.ok) throw new Error("data.json " + r.status); return r.json(); }),
+      fetch("./genre-mock.json").then((r) => { if (!r.ok) throw new Error("genre-mock.json " + r.status); return r.json(); }),
+    ]);
+  } catch (e) { log("data error: " + e.message); return; }
+
+  const people = (data.similarity && data.similarity.people) || Object.keys(PALETTE);
+  const errs = [];
+
+  try {
+    handles.nebulae = await initNebulae(document.getElementById("nebulae"), {
+      families: genre.families,
+      artists: genre.artists,
+      people,
+      colors: PALETTE,
+    }, opts);
+    handles.nebulae.start();
+  } catch (e) { errs.push("nebulae: " + e.message); console.error(e); }
+
+  try {
+    const items = Object.entries(data.tracks || {})
+      .filter(([, t]) => t.first && t.first.ts && t.release)
+      .map(([uri, t]) => ({
+        name: t.name,
+        artists: Array.isArray(t.artists) ? t.artists.join(", ") : String(t.artists || ""),
+        by: t.first.by,
+        ts: t.first.ts,
+        release: t.release,
+        popularity: t.popularity,
+        color: PALETTE[t.first.by] || "#8a93a6",
+        uri,
+      }));
+    handles.timemachine = await initTimeMachine(document.getElementById("timemachine"), items, opts);
+    handles.timemachine.start();
+  } catch (e) { errs.push("timemachine: " + e.message); console.error(e); }
+
+  log(errs.length ? errs.join("\n")
+    : `ok · ${Object.keys(genre.artists).length} artists · ${Object.keys(genre.families).length} nebulae` +
+      (opts.mobile ? " · mobile" : "") + (opts.reducedMotion ? " · reduced-motion" : ""));
+
+  addEventListener("resize", () => Object.values(handles).forEach((h) => h.resize && h.resize()));
+})();
+</script>
+</body>
+</html>

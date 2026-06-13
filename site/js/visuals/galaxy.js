@@ -224,6 +224,14 @@ export async function initGalaxy(container, items, opts = {}) {
     const dirty = new Set();
     let pending = [];
     let lastFlush = performance.now();
+    // Each flush re-uploads a full 2048² atlas to the GPU — cheap on desktop, a
+    // visible hitch on mobile. So mobile batches far larger and is time-gated:
+    // fewer, fatter uploads instead of a stutter every 24 covers. A min interval
+    // keeps the crossfades from all landing at once; a max interval still shows
+    // steady progress on slow links.
+    const FLUSH_MAX = opts.mobile ? 80 : 24;     // upload once this many are queued…
+    const FLUSH_MIN_MS = opts.mobile ? 450 : 0;  // …but not more often than this…
+    const FLUSH_MAX_MS = opts.mobile ? 1100 : 700; // …and at least this often.
     const flush = () => {
       dirty.forEach((a) => { atlases[a].texture.needsUpdate = true; });
       dirty.clear();
@@ -243,11 +251,11 @@ export async function initGalaxy(container, items, opts = {}) {
         try { atlases[a].ctx.drawImage(img, (s % GRID) * CELL, ((s / GRID) | 0) * CELL, CELL, CELL); } catch { continue; }
         dirty.add(a);
         pending.push(i);
-        // flush on size OR time so slow networks still show steady progress
-        if (pending.length >= 24 || performance.now() - lastFlush > 700) flush();
+        const since = performance.now() - lastFlush;
+        if ((pending.length >= FLUSH_MAX && since > FLUSH_MIN_MS) || since > FLUSH_MAX_MS) flush();
       }
     };
-    await Promise.all(Array.from({ length: opts.mobile ? 6 : 6 }, worker));
+    await Promise.all(Array.from({ length: opts.mobile ? 4 : 6 }, worker));
     if (!disposed) flush();
   })();
 

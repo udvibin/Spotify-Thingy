@@ -88,23 +88,34 @@ async function initBg() {
   }
 }
 
-/* galaxy darkness choreography: scrub the fixed #bg-dim overlay with scroll so
-   the background fades to near-black while the galaxy owns the viewport and
-   comes back on the way out — both directions, no animation timers. */
-function initGalaxyDim() {
-  const sec = $("#galaxy"), dim = $("#bg-dim");
-  if (!sec || !dim) return;
+/* darkness choreography: scrub the fixed #bg-dim overlay with scroll so the
+   fractal background fades to near-black while a full-bleed visual owns the
+   viewport (the galaxy, and the genre nebulae which need a dark sky to read),
+   then comes back on the way out — both directions, no animation timers. */
+function initBgDim() {
+  const dim = $("#bg-dim");
+  // [selector, peak dim]. The nebulae field is sparse, so it needs the fractal
+  // (and its bright triangle) pushed further toward black than the cover-dense
+  // galaxy does — but via the same scroll-ramped overlay, so the transition in
+  // and out stays smooth (no hard pop).
+  const secs = [["#galaxy", 0.88], ["#constellation", 0.96]]
+    .map(([s, peak]) => [$(s), peak]).filter(([el]) => el);
+  if (!dim || !secs.length) return;
   let queued = false;
-  const update = () => {
-    queued = false;
+  const dimFor = (sec) => {
     const r = sec.getBoundingClientRect();
     const vh = innerHeight || 1;
     // ramp in while the section top rises 85%→35% of the viewport, ramp out
-    // while its bottom sinks 65%→15% (the desktop pin holds it at full dim)
+    // while its bottom sinks 65%→15% (the desktop galaxy pin holds it at full dim)
     const enter = (vh * 0.85 - r.top) / (vh * 0.5);
     const exit = (r.bottom - vh * 0.15) / (vh * 0.5);
-    const k = Math.max(0, Math.min(1, enter, exit));
-    dim.style.opacity = (k * 0.88).toFixed(3);
+    return Math.max(0, Math.min(1, enter, exit));
+  };
+  const update = () => {
+    queued = false;
+    let op = 0;
+    for (const [el, peak] of secs) op = Math.max(op, dimFor(el) * peak);
+    dim.style.opacity = op.toFixed(3);
   };
   const queue = () => { if (!queued) { queued = true; requestAnimationFrame(update); } };
   addEventListener("scroll", queue, { passive: true });
@@ -143,7 +154,7 @@ async function boot() {
   }
 
   setupReveals();
-  initGalaxyDim();
+  initBgDim();
 
   // dev: ?glass opens the frosted-glass tuner panel
   if (new URLSearchParams(location.search).has("glass")) {

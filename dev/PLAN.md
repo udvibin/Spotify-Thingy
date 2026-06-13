@@ -23,20 +23,124 @@ already uses. Everything free: Spotify Web API, Drive API, Actions, Pages.
    custom domain decision (is-a.dev subdomain or ~₹400/yr .in)
 2. ~~Galaxy wheel-zoom mechanic~~ DECIDED 12 Jun — current behaviour stays
    (ctrl+wheel / pinch zooms, plain wheel scrolls). No further work.
-3. **Constellation v2 redesign** — THE remaining blocker before the big
-   push. Rejected as-is: overlapping labels, disconnected low-similarity
-   nodes, weights unreadable. Rethink layout (label collision avoidance,
-   maybe 2D, dark backdrop like the galaxy). Uday wants frontier-grade
-   data-viz here.
+3. **Constellation v2 redesign** — SHIPPED 13 Jun. v1 (cosine similarity
+   graph) rejected: overlapping labels, disconnected low-similarity nodes,
+   unreadable weights — a data-shape problem (13 nodes is too few for a
+   force graph; a cosine matrix shows a *number about* taste, not taste
+   itself). Replaced by the **genre nebulae** (artists as stars clustered
+   in genre-family fog clouds, each boi a constellation traced through
+   their artists). Built as a mock, then polished (Uday: v1 mock "looked
+   childish") into a proper astrophotography look and wired into
+   `#constellation`. Full design in "Genre nebulae" below. The **time
+   machine** mock is PARKED (see Scope creep). Mock page `site/mocks.html`
+   stays for reference.
 4. ~~Nerd-view CTA~~ DONE 12 Jun — bordered `.nerd-cta` block in the outro
    ("want every chart, every table? open the nerd view →"); footer is now
    just "built with ❤️".
-5. ~~Galaxy mobile loading~~ DONE 12 Jun — pipeline now stores `art_sm`
-   (Spotify's 64px art) per track; mobile galaxy + fallback grid load it
-   instead of the 300px art (~5x fewer bytes), texture flushes are also
-   time-based (700 ms) so covers appear steadily on slow networks.
+5. ~~Galaxy mobile loading~~ DONE 12 Jun, improved 13 Jun — pipeline stores
+   `art_sm` (Spotify's 64px art); mobile galaxy + fallback grid load it
+   instead of the 300px art (~5x fewer bytes). 13 Jun: each flush
+   re-uploads a full 2048² atlas (a visible hitch on mobile), so mobile now
+   batches far larger and time-gates uploads (≥80 covers, min 450 ms / max
+   1100 ms) and runs 4 loader workers instead of 6 — fewer, fatter uploads,
+   smoother scroll during load. Tunables in `visuals/galaxy.js` (`FLUSH_*`).
 6. ~~Glass defaults~~ LOCKED 12 Jun by Uday via ?glass tuner:
    `--glass-fill:0; --glass-blur:7px; --glass-sat:160%` (pure refraction).
+
+## Genre nebulae (SHIPPED 13 Jun — `#constellation` section)
+
+The constellation slot now renders **`site/js/visuals/nebulae.js`**, wired
+through `sections/constellation.js` via `lazyVisual` (CSS fallback = genre
+families list in `#pairs`). The mock page `site/mocks.html` stays for
+reference (still loads the parked time machine too). Verified clean
+(0 console errors / 0 failed requests, desktop + mobile) via
+`dev/verify_site.py`; screenshots `dev/screens/live-nebulae-*.png`.
+
+- **Concept:** invert the graph. Stars = artists (~200, everything with
+  ≥2 shares), clustered inside genre-family nebula clouds (desi, hip hop,
+  house & edm, indie & dream, …). People are *constellations*: hover/click
+  a person chip and an MST of glowing lines in their color is traced
+  through every artist they've shared (animated draw-in via
+  `setDrawRange`). Taste becomes literally visible — no percentages.
+- **Layout:** all precomputed at init, no per-frame physics. Family
+  anchors on a flattened fibonacci sphere + pairwise overlap relaxation;
+  artists scattered in flattened balls around their anchor + local
+  repulsion. Deterministic (`mulberry32` seeds).
+- **Look — the polish pass (Uday: v1 mock "looked childish").** v1 was
+  candy-bright rainbow fog blobs + uniform fuzzy star-dots + shouty
+  oversized all-caps labels. Reworked toward astrophotography:
+  - **Palette** desaturated to cohesive deep-space tones (Hα reds, OIII
+    teals, reflection blues, dusty golds) — `FAMILY_COLORS`, now in its
+    own three-free module `site/js/visuals/family-colors.js` (re-exported
+    by nebulae.js; the section's CSS fallback imports it without pulling
+    in WebGL).
+  - **Gas.** Texture is **domain-warped** fBm (`fbm(p + W·fbm(p + W·fbm(p)))`)
+    baked once into 3 canvas textures (soft rounded `(1-r)²` mask + contrast
+    threshold → cloud texture). Each cluster = ~7-15 additive sprites: 2
+    brighter `coreCol` central sprites + body sprites at the genre hue with
+    per-sprite warm/cool drift, sized by the cluster radius. Aesthetic is
+    **explicitly not final** — Uday: revisit the cloud shapes another time.
+    (History: pass 1 invisible grey smudges → pass 2/3 soft colour clouds
+    → pass 4 tried elongated wisps + connective bridges but they read as
+    jagged star-bursts → **reverted to the pass-2/3 soft clouds**, which is
+    what ships now. Camera default zoomed out (orbit radius desktop 60 /
+    mobile 90, was 46/72).)
+  - **Scroll choreography (Uday: "scroll in and scroll out").** The nebula
+    handle exposes `setReveal(k)`; `sections/constellation.js` scrubs it with
+    scroll (same ramp as `#bg-dim`) to fade + drift the canvas and chips in
+    as the section enters and out as it leaves (CSS opacity/transform on the
+    canvas — cheap; skips the transform under reduced-motion).
+  - **Background (settled 13 Jun, 3rd pass):** the sparse field let the
+    fractal bg bleed (bright orange wedge washing out the gas). First tried
+    an opaque backdrop sprite — Uday: "too jarring", wanted it "like the
+    galaxy". So: **no backdrop** — the canvas stays transparent and the same
+    `#bg-dim` scroll-overlay used by the galaxy darkens the fractal, just to
+    a deeper peak for this section (galaxy 0.88 → **constellation 0.96**,
+    per-section in `initBgDim`). Smooth ramp in/out, near-black at rest, gas
+    layered on top, triangle stays down. Plus the layered starfield (far/mid/
+    near + faint dust) and a soft CSS **vignette** for depth.
+  - **Stars** got sharp cores, wider size variation, a per-star colour
+    temperature jitter, and **4-point diffraction spikes** on the ~top-10
+    anchors (twinkle in the loop). Glow tint barely whitened (lerp 0.08) so
+    stars carry their genre hue.
+  - **Labels** (Uday: "barely visible") — `textSprite` now draws a crisp
+    dark **outline** (round-join stroke) + soft halo under the fill, so type
+    reads over bright gas. Family captions bright (lerp-white .78, ~0.92
+    alpha, weight 700); ~top-16 artist names labelled, also outlined.
+- **Interaction:** orbit camera (drag / ctrl+wheel, mobile pan-y
+  preserved; mobile sits further back, radius 72); star tooltips show
+  micro-genres + per-person share breakdown; readout shows the focused
+  boi's "home nebula" (hidden on mobile until a boi is picked — it
+  collided with the section title and just echoed the subtitle).
+- **Dark backdrop:** the `#bg-dim` scroll choreography (was galaxy-only,
+  now `initBgDim` covers `#galaxy` + `#constellation`, max of the two)
+  fades the fractal bg to near-black while the nebulae own the viewport —
+  Uday wanted it darker so the stars read.
+- **Genre data — now in the pipeline.** Derivation lives in
+  **`dashboard/genres.py`** (`derive_genres(tracks, cache)`), called by
+  `generate.py` to emit `data.json["genres"] = {families: {name → stats},
+  artists: {name → {family, genres[:3], shares, by}}}` (~25 KB). The
+  committed `data.json` was patched in place with this block (offline,
+  from `resolution_cache.json` — zero API calls), so the live site works
+  before the next CI regen, which produces the identical block. The dev
+  mock script `dev/derive_genre_mock.py` is now a thin wrapper over the
+  same module (can't drift) and still writes `site/genre-mock.json`.
+- **Genre→family mapping:** ordered keyword rules (first match wins;
+  "punjabi hip hop" must hit *desi hip hop* before *desi*/*hip hop*).
+  **Spotify's 2024 genre purge** left big mainstream artists (Weeknd,
+  Frank Ocean, Metro Boomin…) with zero genres — rescued by (1) collab
+  inference: inherit majority family of co-credited artists, then
+  (2) `GENRE_PINS`, a small hand-pin map in the spirit of the pinned
+  resolution cache. Whatever's left stays in an "uncharted" nebula
+  (deliberate flavor — only truly obscure stuff lands there).
+- **Still open / future prospects (genre):** **nebula cloud aesthetics**
+  (Uday parked a deeper visual pass — current soft clouds are "good enough
+  to ship", but the smoke/filament look is unsolved); richer per-boi genre
+  storytelling (e.g. a "genre fingerprint" stat); tightening the keyword
+  rules / `GENRE_PINS` as the catalogue grows; shrinking "uncharted".
+  `visuals/constellation.js` (the dead v1 graph) is no longer used by the
+  live site, but `visuals-test.html` still imports it — delete both (and
+  swap visuals-test to the nebulae) on a future cleanup pass.
 
 ## Scope creep (explicitly parked — do not pick up)
 
@@ -44,6 +148,14 @@ already uses. Everything free: Spotify Web API, Drive API, Actions, Pages.
   retired 12 Jun as scope creep.
 - **Playable vinyl** — hero record that actually plays the playlist's
   songs. Glorious. Parked.
+- **Time machine** (`site/js/visuals/timemachine.js`) — PARKED 13 Jun by
+  Uday ("the timeline one … lets park that") in favour of shipping the
+  nebulae. Still fully built + mocked at `site/mocks.html` (loads it under
+  the nebulae). Idea: every track plotted *when shared* (x) vs *when made*
+  (y), with a "release frontier" curve and power-scaled (`t^2.6`) depth
+  axis; readout = median age-when-shared / day-one shares / deepest cut.
+  100% existing `data.json` (no pipeline changes). Revive by adding a
+  `#timemachine` section + module mirroring `sections/constellation.js`.
 6. ~~Hero text rewrite~~ DONE 12 Jun — wordmark is now the H1:
    "Mandatory *Vibe* Compliance" (coral italic "Vibe", matching the
    section-title accent); computed stats line moved to a serif-italic
@@ -56,6 +168,15 @@ already uses. Everything free: Spotify Web API, Drive API, Actions, Pages.
    rim, low fill so the bg stays visible); galaxy/constellation overlay
    text gets a smaller `.glass-scrim`. Falls back to near-solid panels
    under `prefers-reduced-transparency`.
+9. ~~Hero vinyl position~~ DONE 13 Jun — the disc was floating mid-page
+   (a big in-flow `margin-top`, and a separate, higher value on mobile).
+   `.vinyl-stage` is now `position:absolute` pinned to the hero bottom
+   (`left/right:0 + margin-inline:auto` to centre without a transform, so
+   the gsap entrance `y` tween still works), `bottom:clamp(...)`. Sits just
+   above the page edge on every viewport. The wordmark then sat dead-centre,
+   so `.hero` is now `justify-content:flex-start` with
+   `padding-top:clamp(7rem,19vh,13.5rem)` — wordmark back in the upper third
+   (~29% vh, near its original spot). The absolute vinyl is unaffected.
 
 ## Architecture (reference)
 
@@ -83,8 +204,9 @@ CSS fallback; reduced-motion respected; mobile caps DPR/texture counts.
 
 **data.json schema:** normalized around `tracks` (URI → metadata +
 `shared_by`), plus precomputed `people` / `years` / `timeline` /
-`similarity` / `trendsetters` / `facts`. Crossovers and re-shares are
-derived client-side from `tracks.shared_by`. ~350 KB raw.
+`similarity` / `genres` (artist→family for the nebulae) / `trendsetters` /
+`facts`. Crossovers and re-shares are derived client-side from
+`tracks.shared_by`. ~450 KB raw.
 
 ## Gotchas & decisions (hard-won, don't relearn)
 
@@ -120,3 +242,13 @@ derived client-side from `tracks.shared_by`. ~350 KB raw.
 - `dev/verify_site.py` — full-page Playwright check (console errors, failed
   requests, screenshots per section into `dev/screens/`, gitignored)
 - `dev/verify_bg.py` — background-specific screenshots/check
+- `site/mocks.html` — reference mock page: the shipped genre nebulae +
+  the PARKED time machine, real data; `dev/verify_mocks.py` checks +
+  screenshots. (The nebulae itself is live in `#constellation`.)
+- `dashboard/genres.py` — the genre-family derivation (`derive_genres`,
+  `FAMILY_COLORS` source is `site/js/visuals/family-colors.js`); imported
+  by `generate.py` (emits `data.json["genres"]`) and by the dev script
+- `dev/derive_genre_mock.py` — thin wrapper over `dashboard/genres.py`
+  that writes `site/genre-mock.json` for the mock page (offline, no auth);
+  `dev/genre_freq.py` dumps share-weighted genre frequencies (used to
+  design the family mapping)

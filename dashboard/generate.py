@@ -32,6 +32,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 from common import parse_chat, message_meta, extract_links, DISPLAY_NAMES
+from genres import derive_genres
 import spotify as bot
 
 bot.LOG_FILENAME = os.path.join(HERE, "generate_log.txt")
@@ -314,6 +315,8 @@ def build_data(msgs: list[dict], shares: list[dict], cache: dict) -> dict:
          "text": f"{banger_champ[0]}, {banger_champ[1]} times"},
     ]
 
+    tracks_block = {u: {**t, "shared_by": dict(t["shared_by"])} for u, t in track_out.items()}
+
     all_ts = [m["ts"] for m in msgs]
     return {
         "meta": {
@@ -326,12 +329,14 @@ def build_data(msgs: list[dict], shares: list[dict], cache: dict) -> dict:
             },
         },
         "people": people,
-        "tracks": {u: {**t, "shared_by": dict(t["shared_by"])} for u, t in track_out.items()},
+        "tracks": tracks_block,
         "years": {str(y): {"shares": sum(c.values()), "top_artists": c.most_common(15)}
                   for y, c in sorted(years_top.items())},
         "timeline": {ym: {"total": v["total"], "by": dict(v["by"])}
                      for ym, v in sorted(timeline.items())},
         "similarity": {"people": names, "matrix": matrix},
+        # genre nebulae: artists bucketed into ~9 macro-families (see dashboard/genres.py)
+        "genres": derive_genres(tracks_block, cache),
         "trendsetters": trendsetters[:20],
         "facts": facts,
     }
